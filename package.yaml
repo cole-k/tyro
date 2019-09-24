@@ -1,10 +1,10 @@
 name:                tyro
 version:             0.1.0.0
-github:              "githubuser/tyro"
+github:              "cole-k/tyro"
 license:             BSD3
-author:              "Author name here"
+author:              "Cole K"
 maintainer:          "example@example.com"
-copyright:           "2019 Author name here"
+copyright:           "2019 Cole K"
 
 extra-source-files:
 - README.md
@@ -24,6 +24,8 @@ dependencies:
 
 library:
   source-dirs: src
+  dependencies:
+    - transformers
 
 executables:
   tyro-exe:
