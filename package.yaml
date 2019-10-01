@@ -25,7 +25,7 @@ dependencies:
 library:
   source-dirs: src
   dependencies:
-    - transformers
+    - mtl
 
 executables:
   tyro-exe:

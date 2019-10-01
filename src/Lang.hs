@@ -9,7 +9,8 @@ module Lang where
 -- LiquidHaskell.
 
 import Utils
-import qualified Control.Monad.Trans.State.Lazy as ST
+import qualified Control.Monad.State.Lazy as ST
+import qualified Control.Monad.Except as E
 
 type Varname = String
 
@@ -28,9 +29,12 @@ data Type
   | TUnit
   deriving (Show, Eq)
 
+-- | Terms are annotated with their types
 data Trm tp = Trm tp (TermF (Trm tp))
 
+-- | Untyped terms
 type TermU = Trm ()
+-- | Typed terms
 type Term = Trm Type
 
 data CtxElem
@@ -47,7 +51,7 @@ data InferCtx
   = InferCtx
   { nextEVar :: Int }
 
-type InferM = ST.State InferCtx
+type InferM = E.ExceptT String (ST.State InferCtx)
 
 -- | Checks if the 'Varname' given is present in the context.
 ctxVarElem :: Varname -> Context -> Bool
@@ -119,3 +123,15 @@ applyCtx ctx tp = case tp of
     getType v (CtxEVarAssignment ev tp)
       | v == ev = Just tp
     getType _ _ = Nothing
+
+applyCtxM :: Context -> Type -> InferM Type
+applyCtxM ctx tp = pure $ applyCtx ctx tp
+
+-- | Gets all of the unbound 'EVar's in a type.
+freeEVars :: Type -> [Varname]
+freeEvars TUnit = []
+freeEVars (TVar _) = []
+freeEVars (EVar ev) = [ev]
+-- the foralls should be binding tvars
+freeEVars (Forall _ body) = freeEVars body
+freeEVars (Arr t1 t2) = freeEvars t1 ++ freeEVars t2
