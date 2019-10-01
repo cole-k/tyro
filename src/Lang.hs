@@ -72,6 +72,9 @@ ctxVarElem v (_:ctx) = ctxVarElem v ctx
 ctxVarElemM :: Varname -> Context -> InferM Bool
 ctxVarElemM v c = pure $ ctxVarElem v c
 
+dropFromCtx :: Context -> CtxElem -> Context
+dropFromCtx ctx e = fst $ span (/= e) ctx
+
 -- | Checks if a type is well-formed, i.e. its EVars occur in the context, they
 -- aren't out of order, etc.
 typeWF :: Type -> Context -> Bool
@@ -124,9 +127,6 @@ applyCtx ctx tp = case tp of
       | v == ev = Just tp
     getType _ _ = Nothing
 
-applyCtxM :: Context -> Type -> InferM Type
-applyCtxM ctx tp = pure $ applyCtx ctx tp
-
 -- | Gets all of the unbound 'EVar's in a type.
 freeEVars :: Type -> [Varname]
 freeEvars TUnit = []
@@ -135,3 +135,15 @@ freeEVars (EVar ev) = [ev]
 -- the foralls should be binding tvars
 freeEVars (Forall _ body) = freeEVars body
 freeEVars (Arr t1 t2) = freeEvars t1 ++ freeEVars t2
+
+subTVar :: Varname -> Type -> Type -> Type
+subTVar var subType tp@(TVar v)
+  | var == v  = subType
+  | otherwise = tp
+subTVar var subType tp@(Forall v body)
+  -- we want to respect scoping when substituting a type variable, so we don't
+  -- enter the scope of the body if we have another forall binding the same name
+  | var == v  = tp
+  | otherwise = Forall v $ subTVar var subType body
+subTVar var subType (Arr t1 t2) = Arr (subTVar var subType t1) (subTVar var subType t2)
+subTVar _ _ tp = tp
