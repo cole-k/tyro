@@ -68,10 +68,29 @@ ctxVarElem v (CtxEVarAssignment ev _:_)
 ctxVarElem v (_:ctx) = ctxVarElem v ctx
 
 -- Is this ugly (as in, should this helper function not exist, should the type
--- be changed overall? I want the State for Skolemization...)
+-- be changed overall?)
 ctxVarElemM :: Varname -> Context -> InferM Bool
 ctxVarElemM v c = pure $ ctxVarElem v c
 
+-- | Assigns an EVar with name 'Varname' to the 'Type' in the 'Context',
+-- returning the new 'Context' (throwing an error if assignment is impossible).
+assignCtxEVar :: Varname -> Type -> Context -> InferM Context
+assignCtxEVar a tp [] = E.throwError $ "EVar " <> a <> " not present in the context."
+assignCtxEVar a tp (CtxEVarAssignment ev _:_)
+  | ev == a = E.throwError $ "EVar " <> a <> "already assignd in the context."
+assignCtxEVar a tp (CtxEVar ev:ctx)
+  | ev == a = pure $ CtxEVarAssignment ev tp : ctx
+assignCtxEVar a tp (ctxElem:ctx) = (ctxElem:) <$> assignCtxEVar a tp ctx
+
+-- | Attempts to insert the given '[CtxElem]' before the 'CtxElem', throwing an
+-- error if the 'CtxElem' is not found.
+insertBefore :: CtxElem -> [CtxElem] -> Context -> InferM Context
+insertBefore e newEs [] = E.throwError $ "Element " <> show e <> " not present in context."
+insertBefore e newEs ctx@(ctxElem:ctx')
+  | ctxElem == e = pure $ newEs <> ctx
+  | otherwise    = (ctxElem:) <$> insertBefore e newEs ctx'
+
+-- | Removes the the context after and including the 'CtxElem' given.
 dropFromCtx :: Context -> CtxElem -> Context
 dropFromCtx ctx e = fst $ span (/= e) ctx
 
@@ -136,6 +155,7 @@ freeEVars (EVar ev) = [ev]
 freeEVars (Forall _ body) = freeEVars body
 freeEVars (Arr t1 t2) = freeEvars t1 ++ freeEVars t2
 
+-- | Substitute a TVar for a 'Type' in the given 'Type'.
 subTVar :: Varname -> Type -> Type -> Type
 subTVar var subType tp@(TVar v)
   | var == v  = subType

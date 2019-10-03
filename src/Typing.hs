@@ -31,3 +31,41 @@ subsumes ctx (Forall var body) t2 = do
   ctx' <- subsumes (ctx <> [marker, CtxEVar ev]) body' t2
   -- remove everything after 'marker' from the context
   pure $ dropFromCtx ctx' marker
+-- Forall right
+subsumes ctx t1 (Forall var body) = do
+  let tv = CtxTVar var
+  ctx' <- subsumes (ctx <> [tv]) t1 body
+  pure $ dropFromCtx ctx tv
+-- InstantiateL
+subsumes ctx (EVar a) t2 = do
+  when (a `elem` freeEVars t2) . throwError $ "EVar " <> a <> " is free in type " <> show t2 <> "."
+  instantiateL ctx a t2
+-- InstantiateR
+subsumes ctx t1 (EVar a) = do
+  when (a `elem` freeEVars t1) . throwError $ "EVar " <> a <> " is free in type " <> show t1 <> "."
+  instantiateR ctx t1 a
+
+instantiateL :: Context -> Varname -> Type -> InferM Context
+-- InstLReach
+instantiateL ctx a (EVar b) = instantiateReach ctx a b
+-- InstLArr
+instantiateL ctx a (Arr t1 t2) = do
+  a1 <- freshEVar
+  a2 <- freshEVar
+  -- the new context is ctx[a1, a2, a = a1 -> a2]
+  let arr      = Arr (EVar a1) (EVar a2)
+      newElems = [CtxEVar a1, CtxEVar a2]
+  newCtx   <- assignCtxEVar a arr =<< insertBefore (CtxEVar a) newElems ctx
+  newCtx'  <- instantiateR newCtx t1 a1
+  instantiateL newCtx a2 t2
+-- InstLAllR
+instantiateL ctx a (Forall var body) = do
+  let tv = CtxTVar var
+  ctx' <- instantiateL (ctx <> [tv]) a body
+  pure $ dropFromCtx ctx tv
+
+instantiateR :: Context -> Type -> Varname -> InferM context
+instantiateR = undefined
+
+instantiateReach :: Context -> Varname -> Varname -> InferM Context
+instantiateReach = undefined
