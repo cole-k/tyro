@@ -17,12 +17,12 @@ import qualified Control.Monad.Except as E
 
 type Varname = String
 
-data TermF a
+data TermF e
   = Var Varname
   | Unit
-  | Lambda Varname (TermF a)
-  | App (TermF a) (TermF a)
-  | Annot (TermF a) Type
+  | Lambda Varname e
+  | App e e
+  | Annot e Type
 
 data Type
   = TVar Varname
@@ -55,6 +55,14 @@ data InferCtx
   { nextEVar :: Int }
 
 type InferM = E.ExceptT String (ST.State InferCtx)
+
+-- | Gets the 'Type' of a typed 'Term'.
+getType :: Term -> Type
+getType (Trm tp _) = tp
+
+-- | Sets the type annotation of a 'Term'.
+setType :: Trm tp -> tp -> Trm tp
+setType (Trm _ tm) tp = Trm tp tm
 
 -- | Checks if the 'Varname' given is present in the context.
 ctxVarElem :: Varname -> Context -> Bool

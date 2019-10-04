@@ -1,5 +1,6 @@
 module Typing where
 
+import Utils
 import Data.List (elemIndex)
 import Control.Applicative (liftA2)
 import Control.Monad (when)
@@ -46,6 +47,8 @@ subsumes ctx (EVar a) t2 = do
 subsumes ctx t1 (EVar a) = do
   when (a `elem` freeEVars t1) . throwError $ "EVar " <> a <> " is free in type " <> show t1 <> "."
   instantiateR ctx t1 a
+-- Fallthrough case (failure)
+subsumes ctx t1 t2 = throwError $ "Type " <> show t1 <> "does not subsume type " <> show t2 <> "."
 
 instantiateL :: Context -> Varname -> Type -> InferM Context
 -- InstLReach
@@ -108,3 +111,73 @@ instantiateReach ctx ev1 ev2 = do
   where
     ev1Index = elemIndex (CtxEVar ev1) ctx
     ev2Index = elemIndex (CtxEVar ev2) ctx
+
+check :: Context -> TermU -> Type -> InferM (Term, Context)
+-- 1I
+check ctx (Trm _ Unit) TUnit = pure (Trm TUnit Unit, ctx)
+-- Forall I
+check ctx e tp@(Forall var body) = do
+  let tvar = CtxTVar var
+  (Trm _body' e', ctx') <- check (ctx <> [tvar]) e body
+  -- If we successfully check e against the TVar, we can assign e the Forall
+  -- type. We then remove the TVar and everything after it from the context.
+  pure $ (Trm tp e', dropFromCtx tvar ctx')
+-- Arr I
+check ctx (Trm _ (Lambda x body)) (Arr a b) = do
+  let var = CtxVar x a
+  (body', ctx') <- check (ctx <> [var]) body b
+  -- Use the new type in the arrow. Remove everything after and including the
+  -- variable assignment.
+  pure $ (Trm (Arr a b) (Lambda x body'), dropFromCtx var ctx')
+check ctx e b = do
+  (e', ctx') <- infer ctx e
+  let a = getType e'
+  ctx'' <- subsumes ctx' (applyCtx ctx' a) (applyCtx ctx' b)
+  pure (setType e' b, ctx'')
+
+infer :: Context -> TermU -> InferM (Term, Context)
+-- Var
+infer ctx (Trm _ (Var v)) = case findWith matchVarType ctx of
+  Just tp -> pure (Trm tp (Var v), ctx)
+  Nothing -> throwError $ "No type associated with variable " <> v <> " in context " <> show ctx <> "."
+  where
+    matchVarType (CtxVar var tp)
+      | v == var  = Just tp
+    matchVarType _ = Nothing
+-- Anno
+infer ctx (Trm _ (Annot e tp)) = do
+  typeWFM tp ctx
+  check ctx e tp
+-- 1I=>
+infer ctx (Trm _ Unit) = pure (Trm TUnit Unit, ctx)
+-- Arr I =>
+infer ctx (Trm _ (Lambda x body)) = do
+  a <- freshEVar
+  b <- freshEVar
+  let ev1 = CtxEVar a
+      ev2 = CtxEVar b
+      var = CtxVar x (EVar a)
+      arr = (Arr (EVar a) (EVar b))
+  (body', ctx')<- check (ctx <> [ev1, ev2, var]) body (EVar b)
+  pure (Trm arr (Lambda x body'), dropFromCtx var ctx')
+-- Arr E
+infer ctx (Trm _ (App e1 e2)) = do
+  (e1', ctx')  <- infer ctx e1
+  let a = getType e1'
+  (e2', c, ctx'') <- inferApp ctx' (applyCtx ctx' a) e2
+  pure (Trm c (App e1' e2'), ctx'')
+
+-- | The triple returned is the typed 'Term' resulting from the input 'TermU',
+-- the overall 'Type' of the application, and the new 'Context'.
+inferApp :: Context -> Type -> TermU -> InferM (Term, Type, Context)
+inferApp ctx (Forall var body) e = do
+  ev <- freshEVar
+  inferApp (ctx <> [CtxEVar ev]) (subTVar var (EVar ev) body) e
+inferApp ctx (EVar a) e = do
+  a1 <- freshEVar
+  a2 <- freshEVar
+  let newElems = [CtxEVar a1, CtxEVar a2]
+      arr      = (Arr (EVar a1) (EVar a2))
+  newCtx <- assignCtxEVar a arr =<< insertBefore (CtxEVar a) newElems ctx
+  (e', ctx') <- check newCtx e (EVar a1)
+  pure (e', EVar a2, ctx')
