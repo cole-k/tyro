@@ -1,5 +1,7 @@
 module Typing where
 
+import Data.List (elemIndex)
+import Control.Applicative (liftA2)
 import Control.Monad (when)
 import Control.Monad.Except (throwError)
 import Lang
@@ -30,12 +32,12 @@ subsumes ctx (Forall var body) t2 = do
       marker = CtxMarker ev
   ctx' <- subsumes (ctx <> [marker, CtxEVar ev]) body' t2
   -- remove everything after 'marker' from the context
-  pure $ dropFromCtx ctx' marker
+  pure $ dropFromCtx marker ctx'
 -- Forall right
 subsumes ctx t1 (Forall var body) = do
   let tv = CtxTVar var
   ctx' <- subsumes (ctx <> [tv]) t1 body
-  pure $ dropFromCtx ctx tv
+  pure $ dropFromCtx tv ctx
 -- InstantiateL
 subsumes ctx (EVar a) t2 = do
   when (a `elem` freeEVars t2) . throwError $ "EVar " <> a <> " is free in type " <> show t2 <> "."
@@ -62,10 +64,47 @@ instantiateL ctx a (Arr t1 t2) = do
 instantiateL ctx a (Forall var body) = do
   let tv = CtxTVar var
   ctx' <- instantiateL (ctx <> [tv]) a body
-  pure $ dropFromCtx ctx tv
+  pure $ dropFromCtx tv ctx
+-- InstLSolve
+instantiateL ctx a tp = do
+  typeWFM tp (dropFromCtx (CtxEVar a) ctx)
+  assignCtxEVar a tp ctx
 
-instantiateR :: Context -> Type -> Varname -> InferM context
-instantiateR = undefined
+instantiateR :: Context -> Type -> Varname -> InferM Context
+-- InstLReach
+instantiateR ctx (EVar b) a = instantiateReach ctx b a
+-- InstRArr
+instantiateR ctx (Arr t1 t2) a = do
+  a1 <- freshEVar
+  a2 <- freshEVar
+  -- the new context is ctx[a1, a2, a = a1 -> a2]
+  let arr      = Arr (EVar a1) (EVar a2)
+      newElems = [CtxEVar a1, CtxEVar a2]
+  newCtx   <- assignCtxEVar a arr =<< insertBefore (CtxEVar a) newElems ctx
+  newCtx'  <- instantiateL newCtx a1 t1
+  instantiateR newCtx t2 a2
+-- InstRAllL
+instantiateR ctx (Forall var body) a = do
+  ev <- freshEVar
+  let body'  = subTVar var (EVar ev) body
+      marker = CtxMarker ev
+  ctx' <- instantiateR (ctx <> [marker, CtxEVar ev]) body' a
+  -- remove everything after 'marker' from the context
+  pure $ dropFromCtx marker ctx'
+instantiateR ctx tp a = do
+  typeWFM tp (dropFromCtx (CtxEVar a) ctx)
+  assignCtxEVar a tp ctx
 
 instantiateReach :: Context -> Varname -> Varname -> InferM Context
-instantiateReach = undefined
+instantiateReach ctx ev1 ev2 = do
+  -- The EVars in the right order
+  (a,b) <- case liftA2 (<=) ev1Index ev2Index of
+             -- At least one of the EVars is not in the context
+             Nothing -> throwError $ "EVars " <> ev1 <> " and " <> ev2 <> " are not both in the context " <> show ctx <> "."
+             -- Order based on where the EVars are
+             Just b  -> pure $ if b then (ev1, ev2) else (ev2, ev1)
+  -- Assign the later EVar to the earlier EVar
+  assignCtxEVar b (EVar a) ctx
+  where
+    ev1Index = elemIndex (CtxEVar ev1) ctx
+    ev2Index = elemIndex (CtxEVar ev2) ctx

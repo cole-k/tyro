@@ -9,6 +9,9 @@ module Lang where
 -- LiquidHaskell.
 
 import Utils
+import Data.Foldable (find)
+import Data.Maybe (isJust)
+import Control.Monad (when)
 import qualified Control.Monad.State.Lazy as ST
 import qualified Control.Monad.Except as E
 
@@ -91,16 +94,24 @@ insertBefore e newEs ctx@(ctxElem:ctx')
   | otherwise    = (ctxElem:) <$> insertBefore e newEs ctx'
 
 -- | Removes the the context after and including the 'CtxElem' given.
-dropFromCtx :: Context -> CtxElem -> Context
-dropFromCtx ctx e = fst $ span (/= e) ctx
+dropFromCtx :: CtxElem -> Context -> Context
+dropFromCtx e ctx = fst $ span (/= e) ctx
 
 -- | Checks if a type is well-formed, i.e. its EVars occur in the context, they
 -- aren't out of order, etc.
 typeWF :: Type -> Context -> Bool
-typeWF = undefined
+typeWF (EVar a) ctx = isJust $ find matchEVar ctx
+  where
+    matchEVar (CtxEVar ev) = a == ev
+    matchEVar (CtxEVarAssignment ev _) = a == ev
+typeWF (TVar a) ctx = CtxTVar a `elem` ctx
+typeWF TUnit [] = True
+typeWF (Arr t1 t2) ctx = typeWF t1 ctx && typeWF t2 ctx
+typeWF (Forall var body) ctx = typeWF body (ctx <> [CtxTVar var])
 
-typeWFM :: Type -> Context -> InferM Bool
-typeWFM tp ctx = pure $ typeWF tp ctx
+typeWFM :: Type -> Context -> InferM ()
+typeWFM tp ctx = when (not $ typeWF tp ctx) $
+  E.throwError $ "Type " <> show tp <> " not well-formed in context " <> show ctx <> "."
 
 -- | Checks if a context is well-formed, i.e. no repeated elements, no
 -- out-of-order elements, etc.
@@ -112,8 +123,9 @@ ctxWF (CtxEVar ev:ctx) = not (ev `ctxVarElem` ctx) && ctxWF ctx
 ctxWF (CtxEVarAssignment ev tp:ctx) = not (ev `ctxVarElem` ctx) && typeWF tp ctx && ctxWF ctx
 ctxWF (marker@(CtxMarker ev):ctx) = not (ev `ctxVarElem` ctx) && not (marker `elem` ctx) && ctxWF ctx
 
-ctxWFM :: Context -> InferM Bool
-ctxWFM = pure . ctxWF
+ctxWFM :: Context -> InferM ()
+ctxWFM ctx = when (not $ ctxWF ctx) $
+  E.throwError $ "Context " <> show ctx <> " not well-formed."
 
 -- | Generates a fresh EVar from the given 'Varname', ensuring that it doesn't
 -- conflict with other EVars that may have its same name.
