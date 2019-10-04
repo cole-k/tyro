@@ -1,11 +1,14 @@
 module Typing where
 
 import Utils
+import Lang
+import Parser
+
 import Data.List (elemIndex)
 import Control.Applicative (liftA2)
 import Control.Monad (when)
-import Control.Monad.Except (throwError)
-import Lang
+import Control.Monad.State.Lazy (runState, evalState)
+import Control.Monad.Except (throwError, runExceptT)
 
 subsumes :: Context -> Type -> Type -> InferM Context
 -- Var
@@ -21,7 +24,6 @@ subsumes ctx (EVar var1) (EVar var2)
   | var1 == var2 = do
       when (CtxEVar var1 `notElem` ctx) . throwError $ "variable " <> var1 <> " not in the input context " <> show ctx
       pure ctx
-  | otherwise = throwError $ "EVar " <> var1 <> " and EVar " <> var2 <> " are unequal."
 -- Arrow
 subsumes ctx (Arr a1 a2) (Arr b1 b2) = do
   ctx' <- subsumes ctx b1 a1
@@ -116,24 +118,25 @@ check :: Context -> TermU -> Type -> InferM (Term, Context)
 -- 1I
 check ctx (Trm _ Unit) TUnit = pure (Trm TUnit Unit, ctx)
 -- Forall I
-check ctx e tp@(Forall var body) = do
+check ctx e (Forall var body) = do
   let tvar = CtxTVar var
-  (Trm _body' e', ctx') <- check (ctx <> [tvar]) e body
-  -- If we successfully check e against the TVar, we can assign e the Forall
-  -- type. We then remove the TVar and everything after it from the context.
-  pure $ (Trm tp e', dropFromCtx tvar ctx')
+  (e', ctx') <- check (ctx <> [tvar]) e body
+  -- We remove the TVar and everything after it from the context. Note that we
+  -- don't assign the Forall type to the term, although I think it would be safe
+  -- to do so.
+  pure $ (e', dropFromCtx tvar ctx')
 -- Arr I
 check ctx (Trm _ (Lambda x body)) (Arr a b) = do
   let var = CtxVar x a
   (body', ctx') <- check (ctx <> [var]) body b
-  -- Use the new type in the arrow. Remove everything after and including the
-  -- variable assignment.
+  -- Use the checked type in the arrow. Remove everything after and including
+  -- the variable assignment.
   pure $ (Trm (Arr a b) (Lambda x body'), dropFromCtx var ctx')
 check ctx e b = do
   (e', ctx') <- infer ctx e
   let a = getType e'
   ctx'' <- subsumes ctx' (applyCtx ctx' a) (applyCtx ctx' b)
-  pure (setType e' b, ctx'')
+  pure (applyCtx ctx' <$> e', ctx'')
 
 infer :: Context -> TermU -> InferM (Term, Context)
 -- Var
@@ -170,9 +173,11 @@ infer ctx (Trm _ (App e1 e2)) = do
 -- | The triple returned is the typed 'Term' resulting from the input 'TermU',
 -- the overall 'Type' of the application, and the new 'Context'.
 inferApp :: Context -> Type -> TermU -> InferM (Term, Type, Context)
+-- ForallApp
 inferApp ctx (Forall var body) e = do
   ev <- freshEVar
   inferApp (ctx <> [CtxEVar ev]) (subTVar var (EVar ev) body) e
+-- EVarApp
 inferApp ctx (EVar a) e = do
   a1 <- freshEVar
   a2 <- freshEVar
@@ -181,3 +186,16 @@ inferApp ctx (EVar a) e = do
   newCtx <- assignCtxEVar a arr =<< insertBefore (CtxEVar a) newElems ctx
   (e', ctx') <- check newCtx e (EVar a1)
   pure (e', EVar a2, ctx')
+-- ArrApp
+inferApp ctx (Arr a c) e = do
+  (e', ctx') <- check ctx e a
+  pure (e', c, ctx')
+
+runInferM :: InferM a -> Either String a
+runInferM = flip evalState initialCtx . runExceptT
+
+parseInfer :: String -> Either String (Term, Context)
+parseInfer str = do
+  e <- parseTerm str
+  (tm, ctx) <- runInferM (infer [] e)
+  pure (applyCtx ctx <$> tm, ctx)

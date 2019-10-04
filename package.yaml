@@ -26,6 +26,8 @@ library:
   source-dirs: src
   dependencies:
     - mtl
+    - megaparsec
+    - parser-combinators
 
 executables:
   tyro-exe:

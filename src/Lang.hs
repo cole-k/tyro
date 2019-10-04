@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor #-}
 module Lang where
 -- qualified exports...
 
@@ -9,6 +10,7 @@ module Lang where
 -- LiquidHaskell.
 
 import Utils
+
 import Data.Foldable (find)
 import Data.Maybe (isJust)
 import Control.Monad (when)
@@ -23,6 +25,7 @@ data TermF e
   | Lambda Varname e
   | App e e
   | Annot e Type
+  deriving (Show, Functor)
 
 data Type
   = TVar Varname
@@ -34,6 +37,7 @@ data Type
 
 -- | Terms are annotated with their types
 data Trm tp = Trm tp (TermF (Trm tp))
+  deriving (Show, Functor)
 
 -- | Untyped terms
 type TermU = Trm ()
@@ -55,6 +59,8 @@ data InferCtx
   { nextEVar :: Int }
 
 type InferM = E.ExceptT String (ST.State InferCtx)
+
+initialCtx = InferCtx { nextEVar = 0 }
 
 -- | Gets the 'Type' of a typed 'Term'.
 getType :: Term -> Type
@@ -113,7 +119,7 @@ typeWF (EVar a) ctx = isJust $ find matchEVar ctx
     matchEVar (CtxEVar ev) = a == ev
     matchEVar (CtxEVarAssignment ev _) = a == ev
 typeWF (TVar a) ctx = CtxTVar a `elem` ctx
-typeWF TUnit [] = True
+typeWF TUnit _ = True
 typeWF (Arr t1 t2) ctx = typeWF t1 ctx && typeWF t2 ctx
 typeWF (Forall var body) ctx = typeWF body (ctx <> [CtxTVar var])
 
@@ -157,7 +163,7 @@ applyCtx ctx tp = case tp of
   TVar tv       -> tp
   TUnit         -> tp
   EVar ev       -> case findWith (getType ev) ctx of
-                     Just evTp -> evTp
+                     Just evTp -> applyCtx ctx evTp
                      Nothing   -> tp
   Arr tp1 tp2   -> Arr (applyCtx ctx tp1) (applyCtx ctx tp2)
   Forall v body -> Forall v (applyCtx ctx body)
@@ -168,12 +174,12 @@ applyCtx ctx tp = case tp of
 
 -- | Gets all of the unbound 'EVar's in a type.
 freeEVars :: Type -> [Varname]
-freeEvars TUnit = []
+freeEVars TUnit = []
 freeEVars (TVar _) = []
 freeEVars (EVar ev) = [ev]
 -- the foralls should be binding tvars
 freeEVars (Forall _ body) = freeEVars body
-freeEVars (Arr t1 t2) = freeEvars t1 ++ freeEVars t2
+freeEVars (Arr t1 t2) = freeEVars t1 ++ freeEVars t2
 
 -- | Substitute a TVar for a 'Type' in the given 'Type'.
 subTVar :: Varname -> Type -> Type -> Type
@@ -187,3 +193,16 @@ subTVar var subType tp@(Forall v body)
   | otherwise = Forall v $ subTVar var subType body
 subTVar var subType (Arr t1 t2) = Arr (subTVar var subType t1) (subTVar var subType t2)
 subTVar _ _ tp = tp
+
+-- For testing purposes
+unitU :: TermU
+unitU = Trm () Unit
+
+lamU :: Varname -> TermU -> TermU
+lamU x e = Trm () (Lambda x e)
+
+appU :: TermU -> TermU -> TermU
+appU e1 e2 = Trm () (App e1 e2)
+
+varU :: Varname -> TermU
+varU = Trm () . Var
