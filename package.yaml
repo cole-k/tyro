@@ -28,6 +28,7 @@ library:
     - mtl
     - megaparsec
     - parser-combinators
+    - containers
 
 executables:
   tyro-exe:

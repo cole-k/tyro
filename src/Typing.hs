@@ -3,12 +3,15 @@ module Typing where
 import Utils
 import Lang
 import Parser
+import Pretty
 
 import Data.List (elemIndex)
 import Control.Applicative (liftA2)
 import Control.Monad (when)
 import Control.Monad.State.Lazy (runState, evalState)
 import Control.Monad.Except (throwError, runExceptT)
+
+-- TODO remove the debugging stuff or put it elsewhere
 
 subsumes :: Context -> Type -> Type -> InferM Context
 -- Var
@@ -64,7 +67,7 @@ instantiateL ctx a (Arr t1 t2) = do
       newElems = [CtxEVar a1, CtxEVar a2]
   newCtx   <- assignCtxEVar a arr =<< insertBefore (CtxEVar a) newElems ctx
   newCtx'  <- instantiateR newCtx t1 a1
-  instantiateL newCtx a2 t2
+  instantiateL newCtx' a2 (applyCtx newCtx' t2)
 -- InstLAllR
 instantiateL ctx a (Forall var body) = do
   let tv = CtxTVar var
@@ -87,7 +90,7 @@ instantiateR ctx (Arr t1 t2) a = do
       newElems = [CtxEVar a1, CtxEVar a2]
   newCtx   <- assignCtxEVar a arr =<< insertBefore (CtxEVar a) newElems ctx
   newCtx'  <- instantiateL newCtx a1 t1
-  instantiateR newCtx t2 a2
+  instantiateR newCtx' (applyCtx newCtx' t2) a2
 -- InstRAllL
 instantiateR ctx (Forall var body) a = do
   ev <- freshEVar
@@ -124,19 +127,19 @@ check ctx e (Forall var body) = do
   -- We remove the TVar and everything after it from the context. Note that we
   -- don't assign the Forall type to the term, although I think it would be safe
   -- to do so.
-  pure $ (e', dropFromCtx tvar ctx')
+  pure $ (applyCtx ctx' <$> e', dropFromCtx tvar ctx')
 -- Arr I
 check ctx (Trm _ (Lambda x body)) (Arr a b) = do
   let var = CtxVar x a
   (body', ctx') <- check (ctx <> [var]) body b
   -- Use the checked type in the arrow. Remove everything after and including
   -- the variable assignment.
-  pure $ (Trm (Arr a b) (Lambda x body'), dropFromCtx var ctx')
+  pure $ (applyCtx ctx' <$> Trm (Arr a b) (Lambda x body'), dropFromCtx var ctx')
 check ctx e b = do
   (e', ctx') <- infer ctx e
   let a = getType e'
   ctx'' <- subsumes ctx' (applyCtx ctx' a) (applyCtx ctx' b)
-  pure (applyCtx ctx' <$> e', ctx'')
+  pure (applyCtx ctx'' <$> e', ctx'')
 
 infer :: Context -> TermU -> InferM (Term, Context)
 -- Var
@@ -154,7 +157,7 @@ infer ctx (Trm _ (Annot e tp)) = do
 -- 1I=>
 infer ctx (Trm _ Unit) = pure (Trm TUnit Unit, ctx)
 -- Arr I =>
-infer ctx (Trm _ (Lambda x body)) = do
+infer ctx tm@(Trm _ (Lambda x body)) = do
   a <- freshEVar
   b <- freshEVar
   let ev1 = CtxEVar a
@@ -162,7 +165,7 @@ infer ctx (Trm _ (Lambda x body)) = do
       var = CtxVar x (EVar a)
       arr = (Arr (EVar a) (EVar b))
   (body', ctx')<- check (ctx <> [ev1, ev2, var]) body (EVar b)
-  pure (Trm arr (Lambda x body'), dropFromCtx var ctx')
+  pure (applyCtx ctx' <$> Trm arr (Lambda x body'), dropFromCtx var ctx')
 -- Arr E
 infer ctx (Trm _ (App e1 e2)) = do
   (e1', ctx')  <- infer ctx e1
@@ -199,3 +202,11 @@ parseInfer str = do
   e <- parseTerm str
   (tm, ctx) <- runInferM (infer [] e)
   pure (applyCtx ctx <$> tm, ctx)
+
+inferDebug :: String -> IO ()
+inferDebug str = case parseInfer str of
+  Left err        -> putStrLn err
+  Right (tm, ctx) -> do
+    putStr "Context: "
+    print ctx
+    putStrLn . prettyTerm $ tm

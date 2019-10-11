@@ -194,7 +194,20 @@ subTVar var subType tp@(Forall v body)
 subTVar var subType (Arr t1 t2) = Arr (subTVar var subType t1) (subTVar var subType t2)
 subTVar _ _ tp = tp
 
--- For testing purposes
+-- | Substitute a Var for a 'Term'
+subTmVar :: Varname -> Term -> Term -> Term
+subTmVar var subTm (Trm tp e) = case e of
+  Var v | v == var  -> subTm
+        | otherwise -> Trm tp $ Var v
+  -- do we keep the same type? (doesn't matter really)
+  Annot tm tp'      -> Trm tp $ Annot (subTmVar var subTm tm) tp'
+  App tm1 tm2       -> Trm tp $ App (subTmVar var subTm tm1) (subTmVar var subTm tm2)
+  Lambda v body
+    -- don't do anything if the substitution gets shadowed
+    | v == var      -> Trm tp e
+    | otherwise     -> Trm tp $ Lambda v (subTmVar var subTm body)
+  Unit              -> Trm tp Unit
+
 unitU :: TermU
 unitU = Trm () Unit
 
