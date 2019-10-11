@@ -1,5 +1,5 @@
 # tyro
-Tyro is a toy language for bidirectional type checking of a row polymorphic lambda calculus.
+Tyro is a toy language demonstrating bidirectional type checking of a row polymorphic lambda calculus.
 
 # Type System
 The type system is currently being extended, but it is based on [_Complete and Easy Bidirectional 
