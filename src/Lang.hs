@@ -19,14 +19,14 @@ import Control.Monad (when)
 import qualified Control.Monad.State.Lazy as ST
 import qualified Control.Monad.Except as E
 
-type Varname = String
-type Label   = String
-type TailVar = String
+type Varname     = String
+type Label       = String
+type TailVarname = String
 
 data Row e
   = Row
     { rowMap  :: Map Label e
-    , rowTail :: Maybe TailVar
+    , rowTail :: Maybe TailVarname
     }
   deriving (Show, Eq, Functor)
 
@@ -59,7 +59,9 @@ type Term = Trm Type
 
 data CtxElem
   = CtxEVar Varname
+  | CtxTailVar TailVarname
   | CtxEVarAssignment Varname Type
+  | CtxTailVarAssignment TailVarname (Row Type)
   | CtxMarker Varname
   | CtxTVar Varname
   | CtxVar Varname Type
@@ -87,6 +89,7 @@ setType (Trm _ tm) tp = Trm tp tm
 ctxVarElem :: Varname -> Context -> Bool
 -- should the vars each have their own newtypes and this instead be a bunch of
 -- separate functions? If we Skolemize I think this isn't a problem...
+ctxVarElem _ [] = False
 ctxVarElem v (CtxTVar tv:_)
   | v == tv = True
 ctxVarElem v (CtxVar var _:_)
@@ -96,6 +99,13 @@ ctxVarElem v (CtxEVar ev:_)
 ctxVarElem v (CtxEVarAssignment ev _:_)
   | v == ev = True
 ctxVarElem v (_:ctx) = ctxVarElem v ctx
+
+-- | Checks if the 'TailVarname' given is present in the context.
+ctxTailVarElem :: TailVarname -> Context -> Bool
+ctxTailVarElem _ [] = False
+ctxTailVarElem v (CtxTailVar tailV:_)
+  | v == tailV = True
+ctxTailVarElem v (_:ctx) = ctxVarElem v ctx
 
 -- Is this ugly (as in, should this helper function not exist, should the type
 -- be changed overall?)
@@ -111,6 +121,16 @@ assignCtxEVar a tp (CtxEVarAssignment ev _:_)
 assignCtxEVar a tp (CtxEVar ev:ctx)
   | ev == a = pure $ CtxEVarAssignment ev tp : ctx
 assignCtxEVar a tp (ctxElem:ctx) = (ctxElem:) <$> assignCtxEVar a tp ctx
+
+-- | Assigns a TailVar with name 'TailVarName' to the 'Row' in the 'Context',
+-- returning the new 'Context' (throwing an error if assignment is impossible).
+assignCtxTailVar :: Varname -> Row Type -> Context -> InferM Context
+assignCtxTailVar v _ [] = E.throwError $ "Row Tail " <> v <> " not present in the context."
+assignCtxTailVar v _ (CtxTailVarAssignment tailV _:_)
+  | tailV == v = E.throwError $ "Row Tail " <> v <> "already assignd in the context."
+assignCtxTailVar v row (CtxTailVar tailV:ctx)
+  | tailV == v = pure $ CtxTailVarAssignment v row : ctx
+assignCtxTailVar v row (ctxElem:ctx) = (ctxElem:) <$> assignCtxTailVar v row ctx
 
 -- | Attempts to insert the given '[CtxElem]' before the 'CtxElem', throwing an
 -- error if the 'CtxElem' is not found.
@@ -135,6 +155,14 @@ typeWF (TVar a) ctx = CtxTVar a `elem` ctx
 typeWF TUnit _ = True
 typeWF (Arr t1 t2) ctx = typeWF t1 ctx && typeWF t2 ctx
 typeWF (Forall var body) ctx = typeWF body (ctx <> [CtxTVar var])
+-- typeWF (TRcd row{rowMap=rm, rowTail=rt}) ctx =
+--   let mapWF = and <$> traverse typeWF (M.elems rm)
+--   in case rt of
+--     Nothing      -> mapWF
+--     (Just tailV) -> mapWF && isJust (find matchTailVar ctx)
+--   where
+--     matchTailVar (CtxTailVar tailV') = tailV == tailV'
+--     matchTailVar (CtxTailVarAssignment tailV' _) = tailV == tailV'
 
 typeWFM :: Type -> Context -> InferM ()
 typeWFM tp ctx = when (not $ typeWF tp ctx) $
@@ -149,6 +177,8 @@ ctxWF (CtxVar v tp:ctx) = not (v `ctxVarElem` ctx) && typeWF tp ctx && ctxWF ctx
 ctxWF (CtxEVar ev:ctx) = not (ev `ctxVarElem` ctx) && ctxWF ctx
 ctxWF (CtxEVarAssignment ev tp:ctx) = not (ev `ctxVarElem` ctx) && typeWF tp ctx && ctxWF ctx
 ctxWF (marker@(CtxMarker ev):ctx) = not (ev `ctxVarElem` ctx) && not (marker `elem` ctx) && ctxWF ctx
+ctxWF (CtxTailVar tailV:ctx) = not (tailV `ctxTailVarElem` ctx) && ctxWF ctx
+ctxWF (CtxTailVarAssignment tailV row:ctx) = not (tailV `ctxTailVarElem` ctx) && ctxWF ctx -- && typeWF (TRcd row) ctx
 
 ctxWFM :: Context -> InferM ()
 ctxWFM ctx = when (not $ ctxWF ctx) $

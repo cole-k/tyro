@@ -28,6 +28,6 @@ main' = do
               done
        ) $ do
             case parseEval input of
-              Left error -> putStrLn error
+              Left err -> putStrLn err
               Right term -> putStrLn $ prettyTerm term
             main'

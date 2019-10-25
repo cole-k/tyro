@@ -12,6 +12,7 @@ import Control.Monad.State.Lazy (runState, evalState)
 import Control.Monad.Except (throwError, runExceptT)
 
 -- TODO remove the debugging stuff or put it elsewhere
+-- TODO add in explicit error handling for cases that don't match
 
 subsumes :: Context -> Type -> Type -> InferM Context
 -- Var
