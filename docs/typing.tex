@@ -209,23 +209,57 @@ synthesizes output type \(C\) and context \(\Delta\).
   { \synth{\Gamma}{\{\ell : e , r \}}{\{\ell : A, \rho\}}{\Delta} }
 \]
 
-% \[
-%   \deduct[(Prj)]
-%   { \synth{\Gamma}{e}{A}{\Theta} \spc
-%     \presynth{\Theta}{\apply\Theta A}{\prj}{\ell}{C}{\Delta}
-%   }
-%   { \synth{\Gamma}{e\#\ell}{C}{\Delta} }
-%   \spc
-%   \deduct[(\(\forall\) Prj)]
-%   { \presynth{\Gamma, \ev\alpha^{\set{\top}}_{\set{\bot}}}{A[\alpha := \ev\alpha]}{\prj}{\ell}{C}{\Delta} }
-%   { \presynth{\Gamma}{\forall \alpha. A}{\prj}{\ell}{C}{\Delta} }
-% \]
+\[
+  \deduct[(Prj)]
+  { \synth{\Gamma}{e}{A}{\Theta} \spc
+    \presynth{\Theta}{\apply\Theta A}{\prj}{\ell}{C}{\Delta}
+  }
+  { \synth{\Gamma}{e\#\ell}{C}{\Delta} }
+  \spc
+  \deduct[(\(\forall\) Prj)]
+  { \presynth{\Gamma, \ev\alpha}{A[\alpha := \ev\alpha]}{\prj}{\ell}{C}{\Delta} }
+  { \presynth{\Gamma}{\forall \alpha. A}{\prj}{\ell}{C}{\Delta} }
+\]
 
-% \[
-%   \deduct[(RcdPrjR)]
-%     { \lookup{\Gamma}{R}{l}{C}{\Delta} }
-%     { \presynth{\Gamma}{R}{\prj}{\ell}{C}{\Delta} }
-% \]
+\[
+  \deduct[(RcdPrjR)]
+    { \lookup{\Gamma}{R}{l}{C}{\Delta} }
+    { \presynth{\Gamma}{R}{\prj}{\ell}{C}{\Delta} }
+\]
+
+\noindent
+We define record lookup $\lookup{\Gamma}{\rho}{\ell}{A}{\Delta}$ as follows (inputs: $\Gamma$, $\rho$, $l$; outputs: $A$, $\Delta$):
+\[
+\deduct[(lookupYes)]{}{\lookup{\Gamma}{\{\ell : A, R\}}{\ell}{A}{\Gamma}}
+\spc
+\deduct[(lookupNo)]
+  {\ell \neq \ell' \spc \lookup{\Gamma}{\{R\}}{\ell}{A}{\Delta}}
+  {\lookup{\Gamma}{\{\ell' : A', R\}}{\ell}{A}{\Delta}}
+\]
+
+\[
+\deduct[(Lookup \(\ev\alpha\))]
+  { }
+  { \lookup
+      {\Gamma[\ev\alpha]}
+      {\ev\alpha}
+      {\ell}
+      {\ev\alpha_0}
+      {\Gamma[\ev\alpha_0, \ev\alpha_1, \ev\alpha = \{\ell : \ev\alpha_0, \ev\alpha_1\}] }
+  }
+\]
+
+\[
+\deduct[(Lookup RowTail)]
+  { }
+  { \lookup
+      {\Gamma[\ev\alpha]}
+      {\{\ev\alpha\}}
+      {\ell}
+      {\ev\alpha_0}
+      {\Gamma[\ev\alpha_0, \ev\alpha_1, \ev\alpha = (\ell : \ev\alpha_0, \ev\alpha_1)] }
+  }
+\]
 
 \section{Subtyping}
 We define the algorithmic subsumption:
@@ -305,39 +339,6 @@ able to).
   {\subtypes{\Gamma[\eva][\evb]}{\eva}{\evb}{\Gamma[\eva][\evb=\eva]}}
 \]
 
-\noindent
-We define record lookup $\lookup{\Gamma}{\rho}{\ell}{A}{\Delta}$ as follows (inputs: $\Gamma$, $\rho$, $l$; outputs: $A$, $\Delta$):
-\[
-\deduct[(lookupYes)]{}{\lookup{\Gamma}{\{\ell : A, R\}}{\ell}{A}{\Gamma}}
-\spc
-\deduct[(lookupNo)]
-  {\ell \neq \ell' \spc \lookup{\Gamma}{\{R\}}{\ell}{A}{\Delta}}
-  {\lookup{\Gamma}{\{\ell' : A', R\}}{\ell}{A}{\Delta}}
-\]
-
-% \[
-% \deduct[(lookup \(\ev\alpha\))]
-%   { }
-%   { \lookup
-%       {\Gamma[\ev\alpha^\nilC]}
-%       {\ev\alpha}
-%       {\ell}
-%       {\ev\alpha_0}
-%       {\Gamma[\ev\alpha_0^\nilC, \ev\alpha_1^\nilC, \ev\alpha = \{\ell : \ev\alpha_0, \ev\alpha_1\}] }
-%   }
-% \]
-
-% \[
-% \deduct[(lookup \(\ev\alpha\))]
-%   { }
-%   { \lookup
-%       {\Gamma[\ev\alpha^\nilC]}
-%       {\{\ev\alpha\}}
-%       {\ell}
-%       {\ev\alpha_0}
-%       {\Gamma[\ev\alpha_0^\nilC, \ev\alpha_1^\nilC, \ev\alpha = (\ell : \ev\alpha_0, \ev\alpha_1)] }
-%   }
-% \]
 
 \section{Instantiation}
 
