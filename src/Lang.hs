@@ -13,11 +13,22 @@ import Utils
 
 import Data.Foldable (find)
 import Data.Maybe (isJust)
+import Data.Map (Map)
+import qualified Data.Map as M
 import Control.Monad (when)
 import qualified Control.Monad.State.Lazy as ST
 import qualified Control.Monad.Except as E
 
 type Varname = String
+type Label   = String
+type TailVar = String
+
+data Row e
+  = Row
+    { rowMap  :: Map Label e
+    , rowTail :: Maybe TailVar
+    }
+  deriving (Show, Eq, Functor)
 
 data TermF e
   = Var Varname
@@ -25,6 +36,7 @@ data TermF e
   | Lambda Varname e
   | App e e
   | Annot e Type
+  -- | Rcd (Row e)
   deriving (Show, Functor)
 
 data Type
@@ -33,6 +45,7 @@ data Type
   | Forall Varname Type
   | Arr Type Type
   | TUnit
+  -- | TRcd (Row Type)
   deriving (Show, Eq)
 
 -- | Terms are annotated with their types
@@ -167,6 +180,8 @@ applyCtx ctx tp = case tp of
                      Nothing   -> tp
   Arr tp1 tp2   -> Arr (applyCtx ctx tp1) (applyCtx ctx tp2)
   Forall v body -> Forall v (applyCtx ctx body)
+  -- TRcd Row{rowMap=rm, rowTail=Nothing} -> TRcd Row{rowMap=applyCtx ctx <$> rm
+  --                                                 , rowTail=Nothing}
   where
     getType v (CtxEVarAssignment ev tp)
       | v == ev = Just tp
