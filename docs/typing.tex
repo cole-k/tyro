@@ -1,0 +1,433 @@
+\documentclass{article}
+
+% \prooftree and related commands
+\usepackage{ebproof}
+% most symbols
+\usepackage{amsmath}
+\usepackage{amssymb}
+% \RHD
+\usepackage[nointegrals]{wasysym}
+\usepackage{xcolor}
+
+\newcommand{\ignore}[1]{}
+\newcommand{\todo}[1]{\colorbox{red}{#1}}
+\newcommand{\consider}[1]{\colorbox{red}{!!!} #1 \colorbox{red}{!!!}}
+
+\renewcommand{\implies}{\Rightarrow}
+\renewcommand{\impliedby}{\Leftarrow}
+\newcommand{\B}{\mathcal{B}}
+\newcommand{\C}{\mathcal{C}}
+\newcommand{\D}{\mathcal{D}}
+\newcommand{\bottom}{\perp}
+\newcommand{\define}{::=}
+\newcommand{\marker}[1]{\RHD_{#1}}
+\newcommand{\subtype}{<:}
+\newcommand{\synthesizes}{\Rightarrow \!\!\! \Rightarrow}
+\newcommand{\app}{\bullet}
+\newcommand{\prj}{\,\pmb{\#}\,}
+\newcommand{\instLSymbol}{\;\substack{<\\:=}\;}
+\newcommand{\instRSymbol}{\;\substack{<\\=:}\;}
+\newcommand{\ev}{\hat}
+\newcommand{\spc}{\qquad}
+\newcommand{\apply}[1]{\left[#1\right]}
+\newcommand{\eva}[1][]{\ev \alpha_{#1}}
+\newcommand{\evb}{\ev \beta}
+
+\newcommand{\rnil}{\{\}}
+\newcommand{\rcons}[2]{\{#1 \,|\, #2\}}
+
+\newcommand{\synth}[4]{#1 \vdash #2 \Rightarrow #3 \dashv #4}
+\renewcommand{\check}[4]{#1 \vdash #2 \Leftarrow #3 \dashv #4}
+
+\newcommand{\presynth}[6]{#1 \vdash #2 #3 #4 \synthesizes #5 \dashv #6}
+
+\newcommand{\subtypes}[4]{#1 \vdash #2 \subtype #3 \dashv #4}
+
+\newcommand{\instL}[4]{#1 \vdash #2 \instLSymbol #3 \dashv #4}
+\newcommand{\instR}[4]{#1 \vdash #2 \instRSymbol #3 \dashv #4}
+
+\newcommand{\lookup}[5]{#1 \vdash #2 \# #3 \longrightarrow #4 \dashv #5}
+
+\newcommand{\deduct}[3][]
+{
+  \begin{prooftree}
+    \hypo{#2}
+    \infer1[\text{#1}]{#3}
+  \end{prooftree}
+}
+
+\begin{document}
+
+\section{Introduction}
+\consider{These rules are WIP - the ones that come directly from
+  \textit{Complete and Easy} should be right, but the rest have not been proven}
+
+We present a type inference and checking system based off of the one in
+\textit{Complete and Easy Bidirectional Typechecking for Higher-Rank
+  Polymorphism} by Dunfield and Krishnaswami. This system is extended to
+encompass record types.
+
+Future work may include extending to full(er) subtyping, as well as variant
+types.
+
+\section{Grammar}
+
+\subsection{Types}
+\[\begin{array}{rcl}
+\B & \define & \texttt{Num} \mid \texttt{Bool} \mid \cdots
+\\
+% c & \define & \bottom \mid \tau \mid \top
+% \\
+A & \define & \B \mid \ev\alpha \mid \alpha \mid \forall \alpha. A \mid A_0 \to A_1 \mid \{R\}
+\\
+\tau & \define & \B \mid \ev\alpha \mid \alpha \mid \tau_0 \to \tau_1 \mid \{\rho\}
+\\
+R & \define & \cdot \mid \ev\alpha \mid \ell : A, R
+\\
+r & \define & \cdot \mid \ell : A, r
+\\
+\rho & \define & \cdot \mid \ev\alpha \mid \ell : \tau, \rho
+\end{array}
+\]
+
+\subsection{Terms}
+TBD
+
+\subsection{Records}
+In record types, we elide the final empty row type
+($\cdot$); e.g. we write $\{\ell_0 : A_0, \ell_1 : A_1\}$ instead of $\{\ell_0 : A_0, \ell_1 : A_1, \cdot\}$.
+
+\section{Conventions}
+
+We sometimes use $\beta$ and $\gamma$ for type variables in addition
+to $\alpha$. We adopt the same
+conventions Dunfield and Krishnaswami use for their typing rules.
+
+For ease of comparison, we assume that rows have their labels in sorted order.
+
+\section{Typing Rules}
+We define algorithmic typing with the following judgments:
+\[
+\check{\Gamma}{e}{A}{\Delta}
+\spc
+\synth{\Gamma}{e}{A}{\Delta}
+\]
+which respectively represent type checking (inputs: $\Gamma$, $e$, $A$; output: $\Delta$) and type synthesis (inputs: $\Gamma$, $e$; outputs: $A$, $\Delta$).
+
+We also define a binary algorithmic judgement:
+
+\[
+\presynth{\Gamma}{X}{\square}{Y}{Z}{\Delta}
+\]
+
+which represents a binary judgement \(\square\) under the context \(\Gamma\) on
+values \(X\) and \(Y\) that synthesizes \(Z\) with output context \(\Delta\).
+For example, the syntax that Dunfield and Krishnaswami use for function
+application synthesis judgements would be
+
+\[
+\presynth \Gamma A \app e C \Delta
+\]
+
+which means that under context \(\Gamma\), \(A\) applied to the term \(e\)
+synthesizes output type \(C\) and context \(\Delta\).
+
+\[
+  \deduct[(Var)]
+  {
+    (x : A) \in \Gamma
+  }
+  { \synth{\Gamma}{x}{A}{\Gamma} }
+  \spc
+  \deduct[(Sub)]
+  {
+    \synth{\Gamma}{e}{A}{\Theta} \spc
+    \subtypes{\Theta}{\apply\Theta A}{\apply\Theta B}{\Delta}
+  }
+  { \check{\Gamma}{e}{B}{\Delta} }
+\]
+
+\[
+  \deduct[(Annotation)]
+  { \Gamma \vdash A \spc \check{\Gamma}{e}{A}{\Delta} }
+  { \synth{\Gamma}{(e : A)}{A}{\Delta} }
+  \spc
+  \deduct[(\(\forall\) I)]
+  { \check{\Gamma, \alpha}{e}{A}{\Delta, \alpha, \Theta} }
+  { \check{\Gamma}{e}{\forall \alpha. A}{\Delta} }
+\]
+
+\[
+  \deduct[(\(\to\)I)]
+  { \check{\Gamma, x : A}{e}{B}{\Delta, x : A, \Theta} }
+  { \check{\Gamma}{\lambda x. e}{A \to B}{\Delta} }
+  \spc
+  \deduct[(\(\to\)I\(\implies\))]
+  { \check{\Gamma, \ev\alpha, \ev\beta, x : \ev\alpha}{e}{\ev\beta}{\Delta, x : \ev\alpha, \Theta} }
+  { \synth{\Gamma}{\lambda x. e}{\ev\alpha \to \ev\beta}{\Delta} }
+\]
+
+\[
+  \deduct[(\(\to\)E)]
+  { \synth{\Gamma}{e_1}{A}{\Theta} \spc \presynth{\Theta}{\apply\Theta A}{\app}{e_2}{C}{\Delta} }
+  { \synth{\Gamma}{e_1 \ e_2}{C}{\Delta}  }
+  \spc
+  \deduct[(\(\forall\) App)]
+  { \presynth{\Gamma, \ev\alpha}{A[\alpha := \ev\alpha]}{\app}{e}{C}{\Delta} }
+  { \presynth{\Gamma}{\forall \alpha. A}{\app}{e}{C}{\Delta} }
+\]
+
+\[
+  \deduct[(\(\to\)App)]
+    { \check{\Gamma}{e}{A}{\Delta} }
+    { \presynth{\Gamma}{A \to C}{\app}{e}{C}{\Delta} }
+\]
+
+\[
+  \deduct[(\(\ev\alpha\)App)]
+    {
+      \check{\Gamma[\ev{\alpha_2}, \ev{\alpha_1}, \ev \alpha = \ev{\alpha_1} \to
+        \ev{\alpha_2}]}{e}{\ev{\alpha_1}}{\Delta}
+    }
+    { \presynth{\Gamma[\ev\alpha]}{\ev\alpha}{\app}{e}{\ev\alpha_2}{\Delta} }
+\]
+
+
+\[
+\deduct[(\{\}I)]{}{\check{\Gamma}{\{\}}{\{\}}{\Gamma}}
+\spc
+\deduct[(\{\}I\(\implies\))]{}{\synth{\Gamma}{\{\}}{\{\}}{\Gamma}}
+\]
+
+\[
+  \deduct[(RcdI)]
+  { \check{\Gamma}{e}{A}{\Theta} \spc \check{\Theta}{\apply\Theta r}{\apply\Theta\rho}{\Delta} }
+  { \check{\Gamma}{\{\ell : e , r \}}{\{\ell : A, \rho\}}{\Delta} }
+  \spc
+  \deduct[(RcdI\(\implies\))]
+  { \synth{\Gamma}{e}{A}{\Theta} \spc \synth{\Theta}{\apply\Theta r}{\apply\Theta \rho}{\Delta} }
+  { \synth{\Gamma}{\{\ell : e , r \}}{\{\ell : A, \rho\}}{\Delta} }
+\]
+
+% \[
+%   \deduct[(Prj)]
+%   { \synth{\Gamma}{e}{A}{\Theta} \spc
+%     \presynth{\Theta}{\apply\Theta A}{\prj}{\ell}{C}{\Delta}
+%   }
+%   { \synth{\Gamma}{e\#\ell}{C}{\Delta} }
+%   \spc
+%   \deduct[(\(\forall\) Prj)]
+%   { \presynth{\Gamma, \ev\alpha^{\set{\top}}_{\set{\bot}}}{A[\alpha := \ev\alpha]}{\prj}{\ell}{C}{\Delta} }
+%   { \presynth{\Gamma}{\forall \alpha. A}{\prj}{\ell}{C}{\Delta} }
+% \]
+
+% \[
+%   \deduct[(RcdPrjR)]
+%     { \lookup{\Gamma}{R}{l}{C}{\Delta} }
+%     { \presynth{\Gamma}{R}{\prj}{\ell}{C}{\Delta} }
+% \]
+
+\section{Subtyping}
+We define the algorithmic subsumption:
+\[
+\subtypes{\Gamma}{A_0}{A_1}{\Delta}
+\]
+which represents $A_0$ subsumes $A_1$ with input context $\Gamma$ and output
+context $\Delta$. Subsumption is like subtyping, but only applies to
+quantifiers. Everything else must be strict equality (for now, this also means
+records, so you can't use \(\{\ell_1: \texttt{Bool}, \ell_2: \texttt{Num}\}\) in
+place of \(\{\ell_1 : \texttt{Bool}\}\) even though you really \emph{should} be
+able to).
+\[
+  \deduct[(EVar)]{}{\subtypes{\Gamma[\ev\alpha]}{\ev\alpha}{\ev\alpha}{\Gamma[\ev\alpha]}}
+  \spc
+  \deduct[(Var)]{}{\subtypes{\Gamma[\alpha]}{\alpha}{\alpha}{\Gamma[\alpha]}}
+  \spc
+  \deduct[(Const)]{}{\subtypes{\Gamma}{\B}{\B}{\Gamma}}
+\]
+
+\[
+  \deduct[(\(\forall\)L)]
+  { \subtypes{\Gamma, \marker{\ev\alpha}, \ev\alpha}{A[\alpha := \ev\alpha]}{B}{\Delta, \marker{\ev\alpha}, \Theta} }
+  { \subtypes{\Gamma}{\forall \alpha. A}{B}{\Delta} }
+  \spc
+  \deduct[(\(\forall\)R)]
+  { \subtypes{\Gamma, \alpha}{A}{B}{\Delta, \alpha, \Theta} }
+  { \subtypes{\Gamma}{A}{\forall \alpha. B}{\Delta} }
+\]
+
+\[
+  \deduct[(\(\to\))]
+  { \subtypes{\Gamma}{B_1}{A_1}{\Theta} \spc \subtypes{\Theta}{\apply\Theta A_2}{\apply\Theta B_2}{\Delta} }
+  { \subtypes{\Gamma}{A_1 \to A_2}{B_1 \to B_2}{\Delta} }
+\]
+
+\[
+  \deduct[InstantiateL]
+  {\ev \alpha \notin FV(A) \spc \instL{\Gamma[\ev \alpha]}{\ev
+      \alpha}{A}{\Delta}}
+  {\subtypes{\Gamma[\ev \alpha]}{\ev \alpha}{A}{\Delta}}
+  \spc
+  \deduct[InstantiateR]
+  {\ev \alpha \notin FV(A) \spc \instR{\Gamma[\ev \alpha]}{A}{\ev
+      \alpha}{\Delta}}
+  {\subtypes{\Gamma[\ev \alpha]}{A}{\ev \alpha}{\Delta}}
+\]
+
+\[
+  \deduct[Record]{\subtypes{\Gamma}{R_0}{R_1}{\Delta}}{\subtypes{\Gamma}{\{R_0\}}{\{R_1\}}{\Delta}}
+  \spc
+  \deduct[(Row Nil)]{}{ \subtypes{\Gamma}{\cdot}{\cdot}{\Gamma} }
+\]
+
+\[
+  \deduct[(Row)]
+  {\subtypes{\Gamma}{[\Gamma] A}{[\Gamma] B}{\Theta}
+    \spc
+    \subtypes{\Theta}{[\Theta] R_1}{[\Theta] R_2}{\Delta}
+  }
+  { \subtypes{\Gamma}{\ell : A, R_1}{\ell : B, R_2}{\Delta} }
+\]
+
+\[
+  \deduct[(RowTailL)]
+  {\Gamma \vdash r}
+  {\subtypes{\Gamma[\eva]}{\eva}{r}{\Gamma[\eva=r]}}
+  \spc
+  \deduct[(RowTailR)]
+  {\Gamma \vdash r}
+  {\subtypes{\Gamma[\eva]}{r}{\eva}{\Gamma[\eva=r]}}
+\]
+
+\[
+  \deduct[(RowTailReach)]
+  {}
+  {\subtypes{\Gamma[\eva][\evb]}{\eva}{\evb}{\Gamma[\eva][\evb=\eva]}}
+\]
+
+\noindent
+We define record lookup $\lookup{\Gamma}{\rho}{\ell}{A}{\Delta}$ as follows (inputs: $\Gamma$, $\rho$, $l$; outputs: $A$, $\Delta$):
+\[
+\deduct[(lookupYes)]{}{\lookup{\Gamma}{\{\ell : A, R\}}{\ell}{A}{\Gamma}}
+\spc
+\deduct[(lookupNo)]
+  {\ell \neq \ell' \spc \lookup{\Gamma}{\{R\}}{\ell}{A}{\Delta}}
+  {\lookup{\Gamma}{\{\ell' : A', R\}}{\ell}{A}{\Delta}}
+\]
+
+% \[
+% \deduct[(lookup \(\ev\alpha\))]
+%   { }
+%   { \lookup
+%       {\Gamma[\ev\alpha^\nilC]}
+%       {\ev\alpha}
+%       {\ell}
+%       {\ev\alpha_0}
+%       {\Gamma[\ev\alpha_0^\nilC, \ev\alpha_1^\nilC, \ev\alpha = \{\ell : \ev\alpha_0, \ev\alpha_1\}] }
+%   }
+% \]
+
+% \[
+% \deduct[(lookup \(\ev\alpha\))]
+%   { }
+%   { \lookup
+%       {\Gamma[\ev\alpha^\nilC]}
+%       {\{\ev\alpha\}}
+%       {\ell}
+%       {\ev\alpha_0}
+%       {\Gamma[\ev\alpha_0^\nilC, \ev\alpha_1^\nilC, \ev\alpha = (\ell : \ev\alpha_0, \ev\alpha_1)] }
+%   }
+% \]
+
+\section{Instantiation}
+
+Instantiation is a judgement that solves an EVar, either on the left or right
+side of the judgement. It is important to recurisvely assign ``helper'' EVars to
+match the shape of whatever the EVar is being instantiated to instead of blindly
+assigning it, as there may be EVars inside of the type it is being assigned to.
+
+The EVar is instantiated so that it subsumes or is subsumed by the type,
+depending on the type of instantiation (left or right, respectively).
+
+\subsection{Left Instantiation}
+
+\[
+  \deduct[InstLSolve]
+  {\Gamma \vdash \B}
+  {\instL{\Gamma[\ev\alpha]}{\ev \alpha}{\B}{\Gamma[\ev\alpha = \B]}}
+  \spc
+  \deduct[InstLReach]
+  {}
+  {\instL{\Gamma[\ev\alpha][\ev\beta]}{\ev \alpha}{\ev
+      \beta}{\Gamma[\ev\alpha][\ev\beta = \ev\alpha]}}
+\]
+
+\[
+  \deduct[InstLArr] {\instR{\Gamma[\eva[2], \eva[1], \eva = \eva[1] \to
+      \eva[2]]}{A_1}{\eva[1]}{\Theta} \spc \instL{\Theta}{\eva[2]}{\apply \Theta
+      A_2}{\Delta} } {\instL{\Gamma[\eva]}{\eva}{A_1 \to A_2}{\Delta}}
+\]
+
+\[
+  \deduct[InstLRcd]
+  {
+    \begin{array}{l}
+     \instL{\Gamma_0[(\eva[k+1]), \eva[k], \dots, \eva[1], \eva=\{\ell_1 : \eva[1],
+      \ell_2 : \eva[2], \dots, \eva[k], (\eva[k+1])\}]}{\eva[1]}{A_1}{\Gamma_1} \\
+    \instL{\Gamma_1}{\eva[2]}{\apply{\Gamma_2} A_2}{\Gamma_3} \spc \cdots \spc
+     (\instL{\Gamma_k}{\eva[k+1]}{\evb}{\Delta})
+  \end{array}
+  }
+  {\instL{\Gamma_0[\eva]}{\eva}{\{\ell_1:A_1, \ell_2 : A_2, \dots, \ell_{k-1} : A_{k-1}, (\evb)\}}{\Delta}}
+\]
+In the above rule, the parentheticals only come into play if there is a row tail
+in the record. If there isn't, assume that \(\Delta = \Gamma_k\).
+
+\[
+  \deduct[InstLAllR]
+  { \instL{\Gamma[\eva], \beta}{\eva}{B}{\Delta, \beta, \Delta'} }
+  { \instL{\Gamma[\eva]}{\eva}{\forall \beta. B}{\Delta} }
+\]
+
+\subsection{Right Instantiation}
+
+\[
+  \deduct[InstRSolve]
+  {\Gamma \vdash \B}
+  {\instR{\Gamma[\ev\alpha]}{\B}{\ev \alpha}{\Gamma[\ev\alpha = \B]}}
+  \spc
+  \deduct[InstRReach]
+  {}
+  {\instR{\Gamma[\ev\alpha][\ev\beta]}{\ev
+      \beta}{\eva}{\Gamma[\ev\alpha][\ev\beta = \ev\alpha]}}
+\]
+
+\[
+  \deduct[InstRArr] {\instL{\Gamma[\eva[2], \eva[1], \eva = \eva[1] \to
+      \eva[2]]}{\eva[1]}{A_1}{\Theta} \spc \instR{\Theta}{\apply \Theta
+      A_2}{\eva[2]}{\Delta} } {\instR{\Gamma[\eva]}{A_1 \to A_2}{\eva}{\Delta}}
+\]
+
+\[
+  \deduct[InstRRcd]
+  {
+    \begin{array}{l}
+     \instR{\Gamma_0[(\eva[k+1]), \eva[k], \dots, \eva[1], \eva=\{\ell_1 : \eva[1],
+      \ell_2 : \eva[2], \dots, \eva[k], (\eva[k+1])\}]}{A_1}{\eva[1]}{\Gamma_1} \\
+    \instR{\Gamma_1}{\apply{\Gamma_2} A_2}{\eva[2]}{\Gamma_3} \spc \cdots \spc
+     (\instR{\Gamma_k}{\evb}{\eva[k+1]}{\Delta})
+  \end{array}
+  }
+  {\instR{\Gamma_0[\eva]}{\{\ell_1:A_1, \ell_2 : A_2, \dots, \ell_{k-1} : A_{k-1}, (\evb)\}}{\eva}{\Delta}}
+\]
+In the above rule, the parentheticals only come into play if there is a row tail
+in the record. If there isn't, assume that \(\Delta = \Gamma_k\).
+
+\[
+  \deduct[InstRAllL]
+  { \subtypes{\Gamma[\eva], \marker{\ev\alpha}, \evb}{A[\beta := \evb]}{\eva}{\Delta, \marker{\evb}, \Delta'} }
+  { \subtypes{\Gamma[\eva]}{\forall \beta. B}{\eva}{\Delta} }
+\]
+
+
+\end{document}
