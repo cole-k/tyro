@@ -5,7 +5,7 @@ import Lang
 import Typing
 
 -- import Data.Map (Map(..))
--- import qualified Data.Map as M
+import qualified Data.Map as M
 import Control.Monad.Except (Except)
 import qualified Control.Monad.Except as E
 
@@ -35,6 +35,12 @@ eval tm@(Trm _ e) = case e of
                      tm2' <- eval tm2
                      eval $ subTmVar x tm2' body
                    Trm _ tm'             -> E.throwError $ "Expected function, got " <> show tm' <> "."
+  Prj tm lbl -> eval tm >>= \case
+                  Trm _ (Rcd Row{rowMap=rm}) ->
+                    case M.lookup lbl rm of
+                      Just res -> eval res
+                      Nothing  -> E.throwError $ "Record missing label " <> lbl
+                  Trm _ tm' -> E.throwError $ "Expected record, got " <> show tm' <> "."
   _ -> pure tm
 
 parseEval :: String -> Either String Term

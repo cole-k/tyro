@@ -280,6 +280,9 @@ unitU = Trm () Unit
 lamU :: Varname -> TermU -> TermU
 lamU x e = Trm () (Lambda x e)
 
+multiLamU :: [Varname] -> TermU -> TermU
+multiLamU xs e = foldr lamU e xs
+
 appU :: TermU -> TermU -> TermU
 appU e1 e2 = Trm () (App e1 e2)
 

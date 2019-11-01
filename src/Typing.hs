@@ -16,6 +16,9 @@ import Control.Monad.Except (throwError, runExceptT)
 -- TODO add in explicit error handling for cases that don't match
 -- TODO make error messages much, much nicer
 
+-- TODO fix projection in a case like this (\x->((x.a)(x.b)))
+-- -^ something is wrong with passing around contexts almost for sure
+
 -- should tail variables be inserted first when they get added to the context?
 -- Do they go last? Does it matter?
 
@@ -194,7 +197,9 @@ check ctx e b = do
 infer :: Context -> TermU -> InferM (Term, Context)
 -- Var
 infer ctx (Trm _ (Var v)) = case findWith matchVarType ctx of
-  Just tp -> pure (Trm tp (Var v), ctx)
+  -- 'EVar's inside of this type could be solved in another instance of the
+  -- 'Var'.
+  Just tp -> pure (Trm (applyCtx ctx tp) (Var v), ctx)
   Nothing -> throwError $ "No type associated with variable " <> v <> " in context " <> show ctx <> "."
   where
     matchVarType (CtxVar var tp)

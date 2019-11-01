@@ -41,55 +41,57 @@ braces :: Parser a -> Parser a
 braces = between (symbol "{") (symbol "}")
 
 var :: Parser TermU
-var = do
+var = try $ do
   name <- identifier
   pure $ varU name
 
 unit :: Parser TermU
-unit = do
+unit = try $ do
   symbol "()" *> pure unitU
 
 lambda :: Parser TermU
-lambda = try . parens $ do
+lambda = try $ do
   _ <- symbol "\\"
-  x <- identifier
+  xs <- some identifier
   _ <- symbol "->"
   e <- term
-  pure $ lamU x e
+  pure $ multiLamU xs e
 
 record :: Parser TermU
-record = do
-  row <- try . braces $ recordAtom `sepBy` recordSeparator
+record = try $ do
+  row <- braces $ rowAtom `sepBy` rowSeparator
   pure $ rcdU (M.fromList row)
   where
-    recordAtom = do
+    rowAtom = do
       lbl <- identifier
       _ <- symbol ":"
       e <- term
       pure (lbl, e)
-    recordSeparator = symbol ","
+    rowSeparator = symbol ","
 
 projection :: Parser TermU
-projection = try . parens $ do
-  tm <- term
+projection = try $ do
+  tm <- term'
   _ <- symbol "."
   lbl <- identifier
   pure $ prjU tm lbl
 
 app :: Parser TermU
-app = try . parens $ do
-  e1 <- term
+app = try $ do
+  e1 <- term'
   e2 <- term
   pure $ appU e1 e2
 
-term :: Parser TermU
-term = choice
+term' :: Parser TermU
+term' = choice
   [ var
   , unit
   , lambda
   , record
-  , projection
-  , app ]
+  , parens term]
+
+term :: Parser TermU
+term = app <|> projection <|> term'
 
 parseTerm :: String -> Either String TermU
 parseTerm = first (errorBundlePretty) . runParser term ""
