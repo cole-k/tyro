@@ -5,9 +5,10 @@ import Lang
 import Parser
 import Pretty
 
-import Data.List (elemIndex)
+import qualified Data.Map as M
+import Data.List (elemIndex, intercalate)
 import Control.Applicative (liftA2)
-import Control.Monad (when)
+import Control.Monad (when, foldM)
 import Control.Monad.State.Lazy (runState, evalState)
 import Control.Monad.Except (throwError, runExceptT)
 
@@ -53,8 +54,51 @@ subsumes ctx (EVar a) t2 = do
 subsumes ctx t1 (EVar a) = do
   when (a `elem` freeEVars t1) . throwError $ "EVar " <> a <> " is free in type " <> show t1 <> "."
   instantiateR ctx t1 a
+subsumes ctx (TRcd row1) (TRcd row2) = subsumesRow ctx row1 row2
 -- Fallthrough case (failure)
 subsumes ctx t1 t2 = throwError $ "Type " <> show t1 <> "does not subsume type " <> show t2 <> "."
+
+subsumesRow :: Context -> Row Type -> Row Type -> InferM Context
+subsumesRow ctx r1@Row{rowMap=rm1, rowTail=rt1} r2@Row{rowMap=rm2, rowTail=rt2} = do
+  ctx'  <- foldM subsumes' ctx matchingTypes
+  ctx'' <- assignRowTail ctx' r1 missingInRow1
+  assignRowTail ctx'' r2 missingInRow2
+  where
+    matchingTypes = M.intersectionWith (,) rm1 rm2
+    missingInRow1 = Row (rm2 M.\\ rm1) rt2
+    missingInRow2 = Row (rm1 M.\\ rm2) rt1
+    assignRowTail ctx row@Row{rowTail=Nothing} Row{rowMap=rm}
+      | not $ null rm = throwError $
+        "Row " <> prettyRowType row <> " is missing the labels " <> "{"
+        <> intercalate ", " (M.keys rm) <> "} and is closed."
+      | otherwise = pure ctx
+    assignRowTail ctx Row{rowTail=Just rt} newTail = instantiateRowTail ctx rt newTail
+    subsumes' ctx (t1, t2) = subsumes ctx t1 t2
+
+-- !!! this doesn't have a left or right because right now there is no real
+-- subsumption for rows !!!
+instantiateRowTail :: Context -> TailVarname -> Row Type -> InferM Context
+instantiateRowTail ctx a Row{rowMap=rm, rowTail=rt} = do
+  newRowMapEVars <- sequence (freshEVar <$ rm)
+  newRowTail     <- traverse (const freshEVar) rt
+  let newElems = (CtxEVar <$> M.elems newRowMapEVars) <> maybe [] (pure . CtxTailVar) newRowTail
+  ctx'           <- insertBefore (CtxTailVar a) newElems ctx
+    
+  ctx''          <- foldM instantiateL' ctx' $
+    M.intersectionWith (,) newRowMapEVars rm
+  case rt of
+    Nothing  -> pure ctx''
+    -- This is the 'instantiateReach' of row tails
+    Just b -> let aIndex = elemIndex (CtxTailVar a) ctx''
+                  bIndex = elemIndex (CtxTailVar b) ctx''
+              in case liftA2 (<=) aIndex bIndex of
+                   Nothing  -> throwError $ "TailVars " <> a <> " and " <> b <> " are not both in the context " <> show ctx <> "."
+                   Just res -> if res
+                     -- a hack for assigning the tailvars to each other
+                     then assignCtxTailVar b (Row mempty (Just a)) ctx''
+                     else assignCtxTailVar b (Row mempty (Just a)) ctx''
+  where
+    instantiateL' ctx (ev, tp) = instantiateL ctx ev tp
 
 instantiateL :: Context -> Varname -> Type -> InferM Context
 -- InstLReach
@@ -173,6 +217,15 @@ infer ctx (Trm _ (App e1 e2)) = do
   let a = getType e1'
   (e2', c, ctx'') <- inferApp ctx' (applyCtx ctx' a) e2
   pure (Trm c (App e1' e2'), ctx'')
+infer ctx (Trm _ (Rcd Row{rowMap=rm,rowTail=rt})) = do
+  when (not $ null rt) $ throwError "Row tail given in concrete record inference (this shouldn't happen)."
+  (ctx', newRowAssoc) <- foldM infer' (ctx, []) $ M.toList rm
+  let newRow = Row{rowMap= M.fromList newRowAssoc, rowTail=Nothing}
+      tp = TRcd $ getType <$> newRow
+  pure (Trm tp (Rcd newRow), ctx')
+  where
+    -- Yuck
+    infer' (ctx, acc) (key, trm) = (\(trm', ctx') -> (ctx', (key, trm') : acc)) <$> infer ctx trm
 
 -- | The triple returned is the typed 'Term' resulting from the input 'TermU',
 -- the overall 'Type' of the application, and the new 'Context'.

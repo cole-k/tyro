@@ -94,8 +94,7 @@ r & \define & \cdot \mid \ell : A, r
 TBD
 
 \subsection{Records}
-In record types, we elide the final empty row type
-($\cdot$); e.g. we write $\{\ell_0 : A_0, \ell_1 : A_1\}$ instead of $\{\ell_0 : A_0, \ell_1 : A_1, \cdot\}$.
+TBD
 
 \section{Conventions}
 
@@ -103,7 +102,18 @@ We sometimes use $\beta$ and $\gamma$ for type variables in addition
 to $\alpha$. We adopt the same
 conventions Dunfield and Krishnaswami use for their typing rules.
 
-For ease of comparison, we assume that rows have their labels in sorted order.
+In record types, we elide the final empty row type
+($\cdot$); e.g. we write $\{\ell_0 : A_0, \ell_1 : A_1\}$ instead of $\{\ell_0 : A_0, \ell_1 : A_1, \cdot\}$.
+
+% We treat rows sort of like sets, even though we represent them for simplicity's
+% sake as cons lists in the Grammar. Whenever we have syntax that looks like
+% \[\subtypes{\Gamma}{\ell_1 : A_1, \ell_2 : A_2, \dots}{\ell_1 : B_1, \ell_2 :
+%     B_2, \dots, m_1 : B_1', m_2 : B_2', \dots}{\Delta}\]
+% We are implicitly reordering the sets so that the labels that match are at the
+% front and the mismatched labels are at the back. This is important for the row
+% subsumption rules, since it means that we can move the mismatched label
+% resolution to a base case. An implementation of these rules would presumably use
+% something easier, like set difference, to figure out which labels to compare.
 
 \section{Typing Rules}
 We define algorithmic typing with the following judgments:
@@ -261,7 +271,7 @@ We define record lookup $\lookup{\Gamma}{\rho}{\ell}{A}{\Delta}$ as follows (inp
   }
 \]
 
-\section{Subtyping}
+\section{Subsumption}
 We define the algorithmic subsumption:
 \[
 \subtypes{\Gamma}{A_0}{A_1}{\Delta}
@@ -310,27 +320,44 @@ able to).
 
 \[
   \deduct[Record]{\subtypes{\Gamma}{R_0}{R_1}{\Delta}}{\subtypes{\Gamma}{\{R_0\}}{\{R_1\}}{\Delta}}
+\]
+
+For this rule, we treat the rows as sets and assume they are reordered so that
+the matching labels are at the front of the row. An algorithmic implementation
+would want to deal with the recursive and base cases by looking at the set
+intersection and difference of the rows.
+
+\[
+  \deduct[(Row)]
+  {\subtypes{\Gamma}{A}{B}{\Theta}
+    \spc
+    \subtypes{\Theta}{[\Theta] R_1}{[\Theta] R_2}{\Delta}
+  }
+  { \subtypes{\Gamma}{\ell : A, R_1}{\ell : B, R_2}{\Delta} }
   \spc
   \deduct[(Row Nil)]{}{ \subtypes{\Gamma}{\cdot}{\cdot}{\Gamma} }
 \]
 
 \[
-  \deduct[(Row)]
-  {\subtypes{\Gamma}{[\Gamma] A}{[\Gamma] B}{\Theta}
-    \spc
-    \subtypes{\Theta}{[\Theta] R_1}{[\Theta] R_2}{\Delta}
-  }
-  { \subtypes{\Gamma}{\ell : A, R_1}{\ell : B, R_2}{\Delta} }
+  \deduct[(RowMissingL)]
+  {\instL{\Gamma}{\eva}{r}{\Delta}}
+  {\subtypes{\Gamma[\eva], \cdot}{\eva}{r}{\Delta}}
+  \spc
+  \deduct[(RowMissingR)]
+  {\instR{\Gamma}{r}{\eva}{\Delta}}
+  {\subtypes{\Gamma[\eva], \cdot}{r}{\eva}{\Delta}}
 \]
 
+This rule also treats the rows as sets and assumes that there are no equal
+labels between the two rows. Assume an analagous rule for a different order of
+EVars (the order doesn't matter).
 \[
-  \deduct[(RowTailL)]
-  {\Gamma \vdash r}
-  {\subtypes{\Gamma[\eva]}{\eva}{r}{\Gamma[\eva=r]}}
-  \spc
-  \deduct[(RowTailR)]
-  {\Gamma \vdash r}
-  {\subtypes{\Gamma[\eva]}{r}{\eva}{\Gamma[\eva=r]}}
+  \deduct[(RowMissingLR)]
+  {\subtypes{\Gamma}{\eva}{m_1 : B_1, m_2 : B_2, \dots}{\Theta} \spc
+    \subtypes{\Theta}{\ell_1 : \apply\Theta A_1, \ell_2 : \apply\Theta A_2,
+      \dots}{\evb}{\delta}}
+  {\subtypes{\Gamma[\eva][\evb]}{\ell_1 : A_1, \ell_2 : A_2, \dots, \eva}{m_1 :
+      B_1, m_2 : B_2, \dots, \evb}{\Delta}}
 \]
 
 \[
@@ -349,6 +376,8 @@ assigning it, as there may be EVars inside of the type it is being assigned to.
 
 The EVar is instantiated so that it subsumes or is subsumed by the type,
 depending on the type of instantiation (left or right, respectively).
+
+\consider{Need an instantiation for rows that is like InstRcd}
 
 \subsection{Left Instantiation}
 
@@ -375,8 +404,8 @@ depending on the type of instantiation (left or right, respectively).
     \begin{array}{l}
      \instL{\Gamma_0[(\eva[k+1]), \eva[k], \dots, \eva[1], \eva=\{\ell_1 : \eva[1],
       \ell_2 : \eva[2], \dots, \eva[k], (\eva[k+1])\}]}{\eva[1]}{A_1}{\Gamma_1} \\
-    \instL{\Gamma_1}{\eva[2]}{\apply{\Gamma_2} A_2}{\Gamma_3} \spc \cdots \spc
-     (\instL{\Gamma_k}{\eva[k+1]}{\evb}{\Delta})
+    \instL{\Gamma_1}{\eva[2]}{\apply{\Gamma_1} A_2}{\Gamma_2} \spc \cdots \spc
+     (\instL{\Gamma_k}{\eva[k+1]}{\apply{\Gamma_k}\evb}{\Delta})
   \end{array}
   }
   {\instL{\Gamma_0[\eva]}{\eva}{\{\ell_1:A_1, \ell_2 : A_2, \dots, \ell_{k-1} : A_{k-1}, (\evb)\}}{\Delta}}

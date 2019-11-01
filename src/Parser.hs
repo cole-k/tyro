@@ -6,6 +6,7 @@ import Data.Bifunctor
 import Data.Void
 import Text.Megaparsec
 import Text.Megaparsec.Char
+import qualified Data.Map as M
 import qualified Text.Megaparsec.Char.Lexer as L
 
 -- !!! The syntax for this language is pretty simple and subject to change !!!
@@ -36,6 +37,9 @@ identifier = lexeme $ (:) <$> letterChar <*> many alphaNumChar
 parens :: Parser a -> Parser a
 parens = between (symbol "(") (symbol ")")
 
+braces :: Parser a -> Parser a
+braces = between (symbol "{") (symbol "}")
+
 var :: Parser TermU
 var = do
   name <- identifier
@@ -47,11 +51,23 @@ unit = do
 
 lambda :: Parser TermU
 lambda = try . parens $ do
-  symbol "\\"
+  _ <- symbol "\\"
   x <- identifier
-  symbol "->"
+  _ <- symbol "->"
   e <- term
   pure $ lamU x e
+
+record :: Parser TermU
+record = do
+  row <- try . braces $ recordAtom `sepBy` recordSeparator
+  pure $ rcdU (M.fromList row)
+  where
+    recordAtom = do
+      lbl <- identifier
+      _ <- symbol ":"
+      e <- term
+      pure (lbl, e)
+    recordSeparator = symbol ","
 
 app :: Parser TermU
 app = try . parens $ do
@@ -64,6 +80,7 @@ term = choice
   [ var
   , unit
   , lambda
+  , record
   , app ]
 
 parseTerm :: String -> Either String TermU

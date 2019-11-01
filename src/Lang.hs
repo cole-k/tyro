@@ -15,6 +15,7 @@ import Data.Foldable (find)
 import Data.Maybe (isJust)
 import Data.Map (Map)
 import qualified Data.Map as M
+import Control.Applicative ((<|>))
 import Control.Monad (when)
 import qualified Control.Monad.State.Lazy as ST
 import qualified Control.Monad.Except as E
@@ -36,7 +37,7 @@ data TermF e
   | Lambda Varname e
   | App e e
   | Annot e Type
-  -- | Rcd (Row e)
+  | Rcd (Row e)
   deriving (Show, Functor)
 
 data Type
@@ -45,7 +46,7 @@ data Type
   | Forall Varname Type
   | Arr Type Type
   | TUnit
-  -- | TRcd (Row Type)
+  | TRcd (Row Type)
   deriving (Show, Eq)
 
 -- | Terms are annotated with their types
@@ -75,7 +76,13 @@ data InferCtx
 
 type InferM = E.ExceptT String (ST.State InferCtx)
 
+initialCtx :: InferCtx
 initialCtx = InferCtx { nextEVar = 0 }
+
+updateRow :: Row a -> Row a -> Row a
+updateRow Row{rowMap=rm1, rowTail=rt1} Row{rowMap=rm2, rowTail=rt2} =
+  -- precedence goes to the items in the first row
+  Row{rowMap=rm1 <> rm2, rowTail =rt1 <|> rt2}
 
 -- | Gets the 'Type' of a typed 'Term'.
 getType :: Term -> Type
@@ -155,14 +162,14 @@ typeWF (TVar a) ctx = CtxTVar a `elem` ctx
 typeWF TUnit _ = True
 typeWF (Arr t1 t2) ctx = typeWF t1 ctx && typeWF t2 ctx
 typeWF (Forall var body) ctx = typeWF body (ctx <> [CtxTVar var])
--- typeWF (TRcd row{rowMap=rm, rowTail=rt}) ctx =
---   let mapWF = and <$> traverse typeWF (M.elems rm)
---   in case rt of
---     Nothing      -> mapWF
---     (Just tailV) -> mapWF && isJust (find matchTailVar ctx)
---   where
---     matchTailVar (CtxTailVar tailV') = tailV == tailV'
---     matchTailVar (CtxTailVarAssignment tailV' _) = tailV == tailV'
+typeWF (TRcd Row{rowMap=rm, rowTail=rt}) ctx =
+  let mapWF = and $ flip typeWF ctx <$> M.elems rm
+  in case rt of
+    Nothing      -> mapWF
+    (Just tailV) -> mapWF && isJust (find (matchTailVar tailV) ctx)
+  where
+    matchTailVar tailV (CtxTailVar tailV') = tailV == tailV'
+    matchTailVar tailV (CtxTailVarAssignment tailV' _) = tailV == tailV'
 
 typeWFM :: Type -> Context -> InferM ()
 typeWFM tp ctx = when (not $ typeWF tp ctx) $
@@ -210,12 +217,21 @@ applyCtx ctx tp = case tp of
                      Nothing   -> tp
   Arr tp1 tp2   -> Arr (applyCtx ctx tp1) (applyCtx ctx tp2)
   Forall v body -> Forall v (applyCtx ctx body)
-  -- TRcd Row{rowMap=rm, rowTail=Nothing} -> TRcd Row{rowMap=applyCtx ctx <$> rm
-  --                                                 , rowTail=Nothing}
+  TRcd Row{rowMap=rm, rowTail=Just rt}
+    | Just newRow <- findWith (getRowTail rt) ctx ->
+      -- remove the tail from the first row so that it doesn't take precedence
+      -- (maybe it would make sense to just make updateRow overwrite the tail of
+      -- the first row...)
+      TRcd (updateRow Row{rowMap=applyCtx ctx <$> rm, rowTail = Nothing} newRow)
+  TRcd Row{rowMap=rm, rowTail=rt} ->
+    TRcd Row{rowMap=applyCtx ctx <$> rm, rowTail=rt}
   where
     getType v (CtxEVarAssignment ev tp)
       | v == ev = Just tp
     getType _ _ = Nothing
+    getRowTail rt (CtxTailVarAssignment tail row)
+      | rt == tail = Just row
+    getRowTail _ _ = Nothing
 
 -- | Gets all of the unbound 'EVar's in a type.
 freeEVars :: Type -> [Varname]
@@ -225,6 +241,7 @@ freeEVars (EVar ev) = [ev]
 -- the foralls should be binding tvars
 freeEVars (Forall _ body) = freeEVars body
 freeEVars (Arr t1 t2) = freeEVars t1 ++ freeEVars t2
+freeEVars (TRcd Row{rowMap=rm, rowTail=rt}) = foldMap freeEVars rm <> maybe [] pure rt
 
 -- | Substitute a TVar for a 'Type' in the given 'Type'.
 subTVar :: Varname -> Type -> Type -> Type
@@ -237,6 +254,7 @@ subTVar var subType tp@(Forall v body)
   | var == v  = tp
   | otherwise = Forall v $ subTVar var subType body
 subTVar var subType (Arr t1 t2) = Arr (subTVar var subType t1) (subTVar var subType t2)
+subTVar var subType (TRcd Row{rowMap=rm, rowTail=rt}) = TRcd Row{rowMap=subTVar var subType <$> rm, rowTail=rt}
 subTVar _ _ tp = tp
 
 -- | Substitute a Var for a 'Term'
@@ -252,6 +270,7 @@ subTmVar var subTm (Trm tp e) = case e of
     | v == var      -> Trm tp e
     | otherwise     -> Trm tp $ Lambda v (subTmVar var subTm body)
   Unit              -> Trm tp Unit
+  Rcd Row{rowMap=rm, rowTail=rt} -> Trm tp $ Rcd Row{rowMap=subTmVar var subTm <$> rm, rowTail=rt}
 
 unitU :: TermU
 unitU = Trm () Unit
@@ -264,3 +283,7 @@ appU e1 e2 = Trm () (App e1 e2)
 
 varU :: Varname -> TermU
 varU = Trm () . Var
+
+rcdU :: Map Label TermU -> TermU
+-- concrete records have no tails
+rcdU = Trm () . Rcd . (\rm -> Row rm Nothing)

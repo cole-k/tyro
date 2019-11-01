@@ -1,6 +1,8 @@
 module Pretty where
 
 import Lang
+import Data.List (intercalate)
+import qualified Data.Map as M
 
 -- TODO 1. clean this up
 --      2. use an actual pretty printer
@@ -25,6 +27,21 @@ prettyTerm' depth tm@(Trm tp e) =
     padding = replicate (depth*2) ' '
     format  = map (padding <>)
 
+-- | Renders a 'Row a' as a string on a single line, using the provided function
+-- to render the values. Low-tech typeclasses.
+prettyRowWith :: (a -> String) -> Row a -> String
+prettyRowWith render Row{rowMap=rm, rowTail=rt}=
+  intercalate ", " (renderAtom <$> M.toList rm) <> renderedTail
+  where
+    renderAtom (label, value) = label <> ": " <> render value
+    renderedTail = maybe "" (" | "<>) rt
+
+prettyRowTrm :: Row (Trm a) -> String
+prettyRowTrm = prettyRowWith prettyTrmFlat
+
+prettyRowType :: Row Type -> String
+prettyRowType = prettyRowWith prettyType
+
 -- | Renders a 'Trm a' as a string on a single line without the annotation.
 prettyTrmFlat :: Trm a -> String
 prettyTrmFlat (Trm _ e) = case e of
@@ -32,7 +49,8 @@ prettyTrmFlat (Trm _ e) = case e of
   Unit  -> "()"
   Lambda x tm -> "(\\" <> x <> " -> " <> prettyTrmFlat tm <> ")"
   App tm1 tm2 -> "(" <> prettyTrmFlat tm1 <> " " <> prettyTrmFlat tm2 <> ")"
-  Annot tm tp -> "(" <> prettyTrmFlat tm <> " : " <> prettyType tp <> ")"
+  Annot tm tp -> "(" <> prettyTrmFlat tm <> " :: " <> prettyType tp <> ")"
+  Rcd row     -> "{" <> prettyRowTrm row <> "}"
 
 prettyType :: Type -> String
 prettyType (TVar v) = v
@@ -42,3 +60,4 @@ prettyType (Forall v tp) = "∀" <> v <> ". " <> prettyType tp
 -- TODO only add parens when needed (track depth)
 prettyType (Arr tp1 tp2) = "(" <> prettyType tp1 <> ") -> " <> prettyType tp2
 prettyType TUnit = "()"
+prettyType (TRcd row) = "{" <> prettyRowType row <> "}"
