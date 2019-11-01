@@ -27,10 +27,6 @@ type EvalM = Except String
 -- | Evaluate a 'Term' by beta reduction.
 eval :: Term -> EvalM Term
 eval tm@(Trm _ e) = case e of
-  Var _v      -> pure tm
-  Unit        -> pure tm
-  Lambda _ _  -> pure tm
-  Rcd _row    -> pure tm
   -- remove the annotation
   Annot tm' _ -> pure tm'
   App tm1 tm2 -> eval tm1 >>= \case
@@ -39,6 +35,7 @@ eval tm@(Trm _ e) = case e of
                      tm2' <- eval tm2
                      eval $ subTmVar x tm2' body
                    Trm _ tm'             -> E.throwError $ "Expected function, got " <> show tm' <> "."
+  _ -> pure tm
 
 parseEval :: String -> Either String Term
 parseEval str = do

@@ -69,6 +69,13 @@ record = do
       pure (lbl, e)
     recordSeparator = symbol ","
 
+projection :: Parser TermU
+projection = try . parens $ do
+  tm <- term
+  _ <- symbol "."
+  lbl <- identifier
+  pure $ prjU tm lbl
+
 app :: Parser TermU
 app = try . parens $ do
   e1 <- term
@@ -81,6 +88,7 @@ term = choice
   , unit
   , lambda
   , record
+  , projection
   , app ]
 
 parseTerm :: String -> Either String TermU

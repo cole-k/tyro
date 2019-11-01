@@ -51,6 +51,7 @@ prettyTrmFlat (Trm _ e) = case e of
   App tm1 tm2 -> "(" <> prettyTrmFlat tm1 <> " " <> prettyTrmFlat tm2 <> ")"
   Annot tm tp -> "(" <> prettyTrmFlat tm <> " :: " <> prettyType tp <> ")"
   Rcd row     -> "{" <> prettyRowTrm row <> "}"
+  Prj tm lbl  -> prettyTrmFlat tm <> "." <> lbl
 
 prettyType :: Type -> String
 prettyType (TVar v) = v

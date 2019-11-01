@@ -14,6 +14,10 @@ import Control.Monad.Except (throwError, runExceptT)
 
 -- TODO remove the debugging stuff or put it elsewhere
 -- TODO add in explicit error handling for cases that don't match
+-- TODO make error messages much, much nicer
+
+-- should tail variables be inserted first when they get added to the context?
+-- Do they go last? Does it matter?
 
 subsumes :: Context -> Type -> Type -> InferM Context
 -- Var
@@ -73,7 +77,7 @@ subsumesRow ctx r1@Row{rowMap=rm1, rowTail=rt1} r2@Row{rowMap=rm2, rowTail=rt2} 
         <> intercalate ", " (M.keys rm) <> "} and is closed."
       | otherwise = pure ctx
     assignRowTail ctx Row{rowTail=Just rt} newTail = instantiateRowTail ctx rt newTail
-    subsumes' ctx (t1, t2) = subsumes ctx t1 t2
+    subsumes' ctx (t1, t2) = subsumes ctx (applyCtx ctx t1) (applyCtx ctx t2)
 
 -- !!! this doesn't have a left or right because right now there is no real
 -- subsumption for rows !!!
@@ -83,7 +87,6 @@ instantiateRowTail ctx a Row{rowMap=rm, rowTail=rt} = do
   newRowTail     <- traverse (const freshEVar) rt
   let newElems = (CtxEVar <$> M.elems newRowMapEVars) <> maybe [] (pure . CtxTailVar) newRowTail
   ctx'           <- insertBefore (CtxTailVar a) newElems ctx
-    
   ctx''          <- foldM instantiateL' ctx' $
     M.intersectionWith (,) newRowMapEVars rm
   case rt of
@@ -94,11 +97,13 @@ instantiateRowTail ctx a Row{rowMap=rm, rowTail=rt} = do
               in case liftA2 (<=) aIndex bIndex of
                    Nothing  -> throwError $ "TailVars " <> a <> " and " <> b <> " are not both in the context " <> show ctx <> "."
                    Just res -> if res
-                     -- a hack for assigning the tailvars to each other
+                     -- a hack for assigning the tailvars to each other.
+                     -- Note that we don't check that they are unassigned,
+                     -- which may be a problem...
                      then assignCtxTailVar b (Row mempty (Just a)) ctx''
                      else assignCtxTailVar b (Row mempty (Just a)) ctx''
   where
-    instantiateL' ctx (ev, tp) = instantiateL ctx ev tp
+    instantiateL' ctx (ev, tp) = instantiateL ctx ev (applyCtx ctx tp)
 
 instantiateL :: Context -> Varname -> Type -> InferM Context
 -- InstLReach
@@ -226,6 +231,35 @@ infer ctx (Trm _ (Rcd Row{rowMap=rm,rowTail=rt})) = do
   where
     -- Yuck
     infer' (ctx, acc) (key, trm) = (\(trm', ctx') -> (ctx', (key, trm') : acc)) <$> infer ctx trm
+infer ctx (Trm _ (Prj tm lbl)) = do
+  (tm', ctx') <- infer ctx tm
+  let tp' = getType tm'
+  (tp'', ctx'') <- inferPrj ctx' tp' lbl
+  let tm'' = setType tm' (applyCtx ctx'' tp')
+  pure (Trm tp'' (Prj tm'' lbl), ctx'')
+
+inferPrj :: Context -> Type -> Label -> InferM (Type, Context)
+inferPrj ctx (Forall var body) lbl = do
+  ev <- freshEVar
+  inferPrj (ctx <> [CtxEVar ev]) (subTVar var (EVar ev) body) lbl
+inferPrj ctx (EVar a) lbl = do
+  ev <- freshEVar
+  rt <- freshEVar
+  ctx' <- insertBefore (CtxEVar a) [CtxEVar ev, CtxTailVar rt] ctx
+  -- we use instantiateL without loss of generality
+  ctx'' <- assignCtxEVar a (TRcd $ Row (M.singleton lbl (EVar ev)) (Just rt)) ctx'
+  pure (EVar ev, ctx'')
+inferPrj ctx (TRcd Row{rowMap=rm,rowTail=rt}) lbl =
+  case M.lookup lbl rm of
+    Just tp -> pure (tp, ctx)
+    Nothing -> do
+      tailV <- maybe (throwError "Cannot project an unknown label from a closed row.") pure rt
+      ev    <- freshEVar
+      rt'   <- freshEVar
+      ctx'  <- insertBefore (CtxTailVar tailV) [CtxEVar ev, CtxTailVar tailV] ctx
+      ctx'' <- assignCtxTailVar tailV (Row (M.singleton lbl (EVar ev)) (Just rt')) ctx'
+      pure (EVar ev, ctx'')
+inferPrj _ tp _ = throwError $ "Type " <> show tp <> " is incompatible with projection."
 
 -- | The triple returned is the typed 'Term' resulting from the input 'TermU',
 -- the overall 'Type' of the application, and the new 'Context'.

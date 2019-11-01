@@ -38,6 +38,7 @@ data TermF e
   | App e e
   | Annot e Type
   | Rcd (Row e)
+  | Prj e Label
   deriving (Show, Functor)
 
 data Type
@@ -271,6 +272,7 @@ subTmVar var subTm (Trm tp e) = case e of
     | otherwise     -> Trm tp $ Lambda v (subTmVar var subTm body)
   Unit              -> Trm tp Unit
   Rcd Row{rowMap=rm, rowTail=rt} -> Trm tp $ Rcd Row{rowMap=subTmVar var subTm <$> rm, rowTail=rt}
+  Prj tm lbl -> Trm tp $ Prj (subTmVar var subTm tm) lbl
 
 unitU :: TermU
 unitU = Trm () Unit
@@ -287,3 +289,6 @@ varU = Trm () . Var
 rcdU :: Map Label TermU -> TermU
 -- concrete records have no tails
 rcdU = Trm () . Rcd . (\rm -> Row rm Nothing)
+
+prjU :: TermU -> Label -> TermU
+prjU tm lbl = Trm () (Prj tm lbl)
