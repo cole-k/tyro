@@ -159,6 +159,7 @@ typeWF (EVar a) ctx = isJust $ find matchEVar ctx
   where
     matchEVar (CtxEVar ev) = a == ev
     matchEVar (CtxEVarAssignment ev _) = a == ev
+    matchEVar _ = False
 typeWF (TVar a) ctx = CtxTVar a `elem` ctx
 typeWF TUnit _ = True
 typeWF (Arr t1 t2) ctx = typeWF t1 ctx && typeWF t2 ctx
@@ -171,6 +172,7 @@ typeWF (TRcd Row{rowMap=rm, rowTail=rt}) ctx =
   where
     matchTailVar tailV (CtxTailVar tailV') = tailV == tailV'
     matchTailVar tailV (CtxTailVarAssignment tailV' _) = tailV == tailV'
+    matchTailVar _ _ = False
 
 typeWFM :: Type -> Context -> InferM ()
 typeWFM tp ctx = when (not $ typeWF tp ctx) $

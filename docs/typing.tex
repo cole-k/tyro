@@ -12,16 +12,19 @@
 \newcommand{\ignore}[1]{}
 \newcommand{\todo}[1]{\colorbox{red}{#1}}
 \newcommand{\consider}[1]{\colorbox{red}{!!!} #1 \colorbox{red}{!!!}}
+\newcommand{\code}[1]{\texttt{#1}}
 
 \renewcommand{\implies}{\Rightarrow}
 \renewcommand{\impliedby}{\Leftarrow}
+\newcommand{\rcd}[1]{\{#1\}}
 \newcommand{\B}{\mathcal{B}}
 \newcommand{\C}{\mathcal{C}}
 \newcommand{\D}{\mathcal{D}}
+\newcommand{\rowvar}{\alpha_\rho}
 \newcommand{\bottom}{\perp}
 \newcommand{\define}{::=}
 \newcommand{\marker}[1]{\RHD_{#1}}
-\newcommand{\subtype}{<:}
+\newcommand{\subsume}{<:}
 \newcommand{\synthesizes}{\Rightarrow \!\!\! \Rightarrow}
 \newcommand{\app}{\bullet}
 \newcommand{\prj}{\,\pmb{\#}\,}
@@ -36,12 +39,17 @@
 \newcommand{\rnil}{\{\}}
 \newcommand{\rcons}[2]{\{#1 \,|\, #2\}}
 
+\newcommand{\wf}[2]{#1 \vdash #2}
+
+\newcommand{\subtype}{\le}
+\newcommand{\subtypes}[3]{#1 \vdash #2 \le #3}
+
 \newcommand{\synth}[4]{#1 \vdash #2 \Rightarrow #3 \dashv #4}
 \renewcommand{\check}[4]{#1 \vdash #2 \Leftarrow #3 \dashv #4}
 
 \newcommand{\presynth}[6]{#1 \vdash #2 #3 #4 \synthesizes #5 \dashv #6}
 
-\newcommand{\subtypes}[4]{#1 \vdash #2 \subtype #3 \dashv #4}
+\newcommand{\subsumes}[4]{#1 \vdash #2 \subsume #3 \dashv #4}
 
 \newcommand{\instL}[4]{#1 \vdash #2 \instLSymbol #3 \dashv #4}
 \newcommand{\instR}[4]{#1 \vdash #2 \instRSymbol #3 \dashv #4}
@@ -107,7 +115,7 @@ In record types, we elide the final empty row type
 
 % We treat rows sort of like sets, even though we represent them for simplicity's
 % sake as cons lists in the Grammar. Whenever we have syntax that looks like
-% \[\subtypes{\Gamma}{\ell_1 : A_1, \ell_2 : A_2, \dots}{\ell_1 : B_1, \ell_2 :
+% \[\subsumes{\Gamma}{\ell_1 : A_1, \ell_2 : A_2, \dots}{\ell_1 : B_1, \ell_2 :
 %     B_2, \dots, m_1 : B_1', m_2 : B_2', \dots}{\Delta}\]
 % We are implicitly reordering the sets so that the labels that match are at the
 % front and the mismatched labels are at the back. This is important for the row
@@ -152,7 +160,7 @@ synthesizes output type \(C\) and context \(\Delta\).
   \deduct[(Sub)]
   {
     \synth{\Gamma}{e}{A}{\Theta} \spc
-    \subtypes{\Theta}{\apply\Theta A}{\apply\Theta B}{\Delta}
+    \subsumes{\Theta}{\apply\Theta A}{\apply\Theta B}{\Delta}
   }
   { \check{\Gamma}{e}{B}{\Delta} }
 \]
@@ -274,7 +282,7 @@ We define record lookup $\lookup{\Gamma}{\rho}{\ell}{A}{\Delta}$ as follows (inp
 \section{Subsumption}
 We define the algorithmic subsumption:
 \[
-\subtypes{\Gamma}{A_0}{A_1}{\Delta}
+\subsumes{\Gamma}{A_0}{A_1}{\Delta}
 \]
 which represents $A_0$ subsumes $A_1$ with input context $\Gamma$ and output
 context $\Delta$. Subsumption is like subtyping, but only applies to
@@ -283,43 +291,43 @@ records, so you can't use \(\{\ell_1: \texttt{Bool}, \ell_2: \texttt{Num}\}\) in
 place of \(\{\ell_1 : \texttt{Bool}\}\) even though you really \emph{should} be
 able to).
 \[
-  \deduct[(EVar)]{}{\subtypes{\Gamma[\ev\alpha]}{\ev\alpha}{\ev\alpha}{\Gamma[\ev\alpha]}}
+  \deduct[(EVar)]{}{\subsumes{\Gamma[\ev\alpha]}{\ev\alpha}{\ev\alpha}{\Gamma[\ev\alpha]}}
   \spc
-  \deduct[(Var)]{}{\subtypes{\Gamma[\alpha]}{\alpha}{\alpha}{\Gamma[\alpha]}}
+  \deduct[(Var)]{}{\subsumes{\Gamma[\alpha]}{\alpha}{\alpha}{\Gamma[\alpha]}}
   \spc
-  \deduct[(Const)]{}{\subtypes{\Gamma}{\B}{\B}{\Gamma}}
+  \deduct[(Const)]{}{\subsumes{\Gamma}{\B}{\B}{\Gamma}}
 \]
 
 \[
   \deduct[(\(\forall\)L)]
-  { \subtypes{\Gamma, \marker{\ev\alpha}, \ev\alpha}{A[\alpha := \ev\alpha]}{B}{\Delta, \marker{\ev\alpha}, \Theta} }
-  { \subtypes{\Gamma}{\forall \alpha. A}{B}{\Delta} }
+  { \subsumes{\Gamma, \marker{\ev\alpha}, \ev\alpha}{A[\alpha := \ev\alpha]}{B}{\Delta, \marker{\ev\alpha}, \Theta} }
+  { \subsumes{\Gamma}{\forall \alpha. A}{B}{\Delta} }
   \spc
   \deduct[(\(\forall\)R)]
-  { \subtypes{\Gamma, \alpha}{A}{B}{\Delta, \alpha, \Theta} }
-  { \subtypes{\Gamma}{A}{\forall \alpha. B}{\Delta} }
+  { \subsumes{\Gamma, \alpha}{A}{B}{\Delta, \alpha, \Theta} }
+  { \subsumes{\Gamma}{A}{\forall \alpha. B}{\Delta} }
 \]
 
 \[
   \deduct[(\(\to\))]
-  { \subtypes{\Gamma}{B_1}{A_1}{\Theta} \spc \subtypes{\Theta}{\apply\Theta A_2}{\apply\Theta B_2}{\Delta} }
-  { \subtypes{\Gamma}{A_1 \to A_2}{B_1 \to B_2}{\Delta} }
+  { \subsumes{\Gamma}{B_1}{A_1}{\Theta} \spc \subsumes{\Theta}{\apply\Theta A_2}{\apply\Theta B_2}{\Delta} }
+  { \subsumes{\Gamma}{A_1 \to A_2}{B_1 \to B_2}{\Delta} }
 \]
 
 \[
   \deduct[InstantiateL]
   {\ev \alpha \notin FV(A) \spc \instL{\Gamma[\ev \alpha]}{\ev
       \alpha}{A}{\Delta}}
-  {\subtypes{\Gamma[\ev \alpha]}{\ev \alpha}{A}{\Delta}}
+  {\subsumes{\Gamma[\ev \alpha]}{\ev \alpha}{A}{\Delta}}
   \spc
   \deduct[InstantiateR]
   {\ev \alpha \notin FV(A) \spc \instR{\Gamma[\ev \alpha]}{A}{\ev
       \alpha}{\Delta}}
-  {\subtypes{\Gamma[\ev \alpha]}{A}{\ev \alpha}{\Delta}}
+  {\subsumes{\Gamma[\ev \alpha]}{A}{\ev \alpha}{\Delta}}
 \]
 
 \[
-  \deduct[Record]{\subtypes{\Gamma}{R_0}{R_1}{\Delta}}{\subtypes{\Gamma}{\{R_0\}}{\{R_1\}}{\Delta}}
+  \deduct[Record]{\subsumes{\Gamma}{R_0}{R_1}{\Delta}}{\subsumes{\Gamma}{\{R_0\}}{\{R_1\}}{\Delta}}
 \]
 
 For this rule, we treat the rows as sets and assume they are reordered so that
@@ -329,23 +337,23 @@ intersection and difference of the rows.
 
 \[
   \deduct[(Row)]
-  {\subtypes{\Gamma}{A}{B}{\Theta}
+  {\subsumes{\Gamma}{A}{B}{\Theta}
     \spc
-    \subtypes{\Theta}{[\Theta] R_1}{[\Theta] R_2}{\Delta}
+    \subsumes{\Theta}{[\Theta] R_1}{[\Theta] R_2}{\Delta}
   }
-  { \subtypes{\Gamma}{\ell : A, R_1}{\ell : B, R_2}{\Delta} }
+  { \subsumes{\Gamma}{\ell : A, R_1}{\ell : B, R_2}{\Delta} }
   \spc
-  \deduct[(Row Nil)]{}{ \subtypes{\Gamma}{\cdot}{\cdot}{\Gamma} }
+  \deduct[(Row Nil)]{}{ \subsumes{\Gamma}{\cdot}{\cdot}{\Gamma} }
 \]
 
 \[
   \deduct[(RowMissingL)]
   {\instL{\Gamma}{\eva}{r}{\Delta}}
-  {\subtypes{\Gamma[\eva], \cdot}{\eva}{r}{\Delta}}
+  {\subsumes{\Gamma[\eva], \cdot}{\eva}{r}{\Delta}}
   \spc
   \deduct[(RowMissingR)]
   {\instR{\Gamma}{r}{\eva}{\Delta}}
-  {\subtypes{\Gamma[\eva], \cdot}{r}{\eva}{\Delta}}
+  {\subsumes{\Gamma[\eva], \cdot}{r}{\eva}{\Delta}}
 \]
 
 This rule also treats the rows as sets and assumes that there are no equal
@@ -353,17 +361,17 @@ labels between the two rows. Assume an analagous rule for a different order of
 EVars (the order doesn't matter).
 \[
   \deduct[(RowMissingLR)]
-  {\subtypes{\Gamma}{\eva}{m_1 : B_1, m_2 : B_2, \dots}{\Theta} \spc
-    \subtypes{\Theta}{\ell_1 : \apply\Theta A_1, \ell_2 : \apply\Theta A_2,
+  {\subsumes{\Gamma}{\eva}{m_1 : B_1, m_2 : B_2, \dots}{\Theta} \spc
+    \subsumes{\Theta}{\ell_1 : \apply\Theta A_1, \ell_2 : \apply\Theta A_2,
       \dots}{\evb}{\delta}}
-  {\subtypes{\Gamma[\eva][\evb]}{\ell_1 : A_1, \ell_2 : A_2, \dots, \eva}{m_1 :
+  {\subsumes{\Gamma[\eva][\evb]}{\ell_1 : A_1, \ell_2 : A_2, \dots, \eva}{m_1 :
       B_1, m_2 : B_2, \dots, \evb}{\Delta}}
 \]
 
 \[
   \deduct[(RowTailReach)]
   {}
-  {\subtypes{\Gamma[\eva][\evb]}{\eva}{\evb}{\Gamma[\eva][\evb=\eva]}}
+  {\subsumes{\Gamma[\eva][\evb]}{\eva}{\evb}{\Gamma[\eva][\evb=\eva]}}
 \]
 
 
@@ -455,9 +463,145 @@ in the record. If there isn't, assume that \(\Delta = \Gamma_k\).
 
 \[
   \deduct[InstRAllL]
-  { \subtypes{\Gamma[\eva], \marker{\ev\alpha}, \evb}{A[\beta := \evb]}{\eva}{\Delta, \marker{\evb}, \Delta'} }
-  { \subtypes{\Gamma[\eva]}{\forall \beta. B}{\eva}{\Delta} }
+  { \subsumes{\Gamma[\eva], \marker{\ev\alpha}, \evb}{A[\beta := \evb]}{\eva}{\Delta, \marker{\evb}, \Delta'} }
+  { \subsumes{\Gamma[\eva]}{\forall \beta. B}{\eva}{\Delta} }
 \]
 
+
+\section{Extended Declarative Type System}
+An extension of \emph{Complete and Easy}'s declarative type system.
+
+\subsection{Terms}
+
+\[
+  \begin{array}{lcl}
+    e & \define & x \\
+      & | & () \\
+      & | & \rcd{} \\
+      & | & \lambda x. e  \\
+      & | & e e \\
+      & | & (e : A) \\
+      & | & \rcd{\ell_1 : e_1, \dots, \ell_k : e_k} \\
+      & | & (e)
+  \end{array}
+\]
+
+\subsection{Types}
+\[
+  \begin{array}{llcl}
+    \text{Base types} & \B & \define & 1 \\
+                      & & | & \code{Num} \\
+                      & & | & \code{Bool} \\
+                      & & | & \cdots \\
+    \text{Types} & A, B, C & \define & \B \\
+                      & & | & \alpha \\
+                      & & | & \forall \alpha. A \\
+                      & & | & A \to B \\
+                      & & | & \rcd{R} \\
+    \text{Monotypes} & \tau, \sigma & \define & \B \\
+                      & & | & \alpha \\
+                      & & | & \tau \to \sigma \\
+                      & & | & \rcd{\rho} \\
+    \text{Rows} & R & \define & \cdot \\
+                      & & | & \rowvar \\
+                      & & | & \ell : A, R \\
+    \text{Monorows} & \rho & \define & \cdot \\
+                      & & | & \ell : \tau, \rho
+  \end{array}
+\]
+
+\subsection{Contexts}
+\[
+  \begin{array}{lcl}
+    \Psi & \define & \cdot \\
+         & | & \Psi, \alpha \\
+         & | & \Psi, \rowvar \\
+         & | & \Psi, x : A
+    
+  \end{array}
+\]
+
+\subsection{Well-formedness}
+
+The judgement \(\wf \Psi A\) asserts that in the context \(\Psi\), \(A\) is
+well-formed. We will make an abuse of notation and have \(\wf \Psi R\) apply to
+rows as well, even though they are not really types.
+
+\[
+  \deduct[(DeclUVarWF)]
+  {\alpha \in \Psi}
+  {\wf{\Psi}{\alpha}}
+  \spc
+  \deduct[(DeclBaseWF)]
+  {}
+  {\wf{\Psi}{\B}}
+\]
+\[
+  \deduct[(DeclArrowWF)]
+  {\wf \Psi A \spc \wf \Psi B}
+  {\wf \Psi {A \to B}}
+  \spc
+  \deduct[(DeclForallWF)]
+  {\wf{\Psi, \alpha}{A}}
+  {\wf \Psi {\forall \alpha. A}}
+  \spc
+  \deduct[(DeclRecordWF)]
+  {\wf \Psi R}
+  {\wf \Psi {\rcd{R}}}
+\]
+
+\[
+  \deduct[(DeclRowNilWF)]
+  {}
+  {\wf \Psi \cdot}
+  \spc
+  \deduct[(DeclRowVarWF)]
+  {\rowvar \in \Psi}
+  {\wf \Psi \rowvar}
+  \spc
+  \deduct[(DeclRowWF)]
+  {\wf \Psi A \spc \wf \Psi R}
+  {\wf \Psi {\ell : A, R}}
+\]
+
+% Error in Complete and Easy
+% \[
+%   \begin{prooftree}
+%     \hypo{\beta \in \cdot, \beta}
+%     \infer1{\wf{\cdot, \beta}{\beta \le \beta}}
+%     \infer1{\wf{\cdot}{\beta \le \forall \beta. \beta}}
+%   \end{prooftree}
+% \]
+% By Lemma 4, this implies \(\wf{\cdot}{\beta}\) which is not true.
+
+\subsection{Subtyping}
+We'll also make an abuse of notation and have the judgement \(\subtypes{\Psi}{R_1}{R_2}\) be valid for subtyping.
+
+TODO: add the rules from complete and easy.
+\[
+  \deduct[(\(\subtype\) RowNil)]
+  {}
+  {\subtypes{\Psi}{\cdot}{\cdot}}
+  \spc
+  \deduct[(\(\subtype\) RowVar)]
+  {}
+  {\subtypes{\Psi}{\rowvar}{\rowvar}}
+\]
+
+We treat the rows sort of as sets and reorder the labels appropriately to match
+them.
+
+\[
+  \deduct[(\(\subtype\) Row)]
+  {\subtypes{\Psi}{A}{B} \spc \subtypes{\Psi}{R_1}{R_2}}
+  {\subtypes \Psi {\ell : A, R_1}{\ell : B, R_2}}
+  \spc
+  \deduct[(\(\subtype\) \text{Rcd})]
+  {\subtypes \Psi R_1 R_2}
+  {\subtypes {\Psi} {\rcd{R_1}} {\rcd{R_2}}}
+  \deduct[(\(\subtype\forall\)L Rcd)]
+  {\wf \Psi \rho \spc \subtypes \Psi {[\alpha \mapsto \rho]A} B }
+  {\wf \Psi }
+\]
 
 \end{document}
