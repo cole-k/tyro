@@ -33,3 +33,4 @@ better-cache/
 /subs/*/*.cabal
 stack*.yaml.lock
 /dist-newstyle/
+.DS_Store
