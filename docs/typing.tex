@@ -5,9 +5,34 @@
 % most symbols
 \usepackage{amsmath}
 \usepackage{amssymb}
+% graphic includes + rotation
+\usepackage{graphicx}
+% better font
+\usepackage{lmodern}
+\usepackage{upgreek}
+% theorems
+\usepackage{amsthm}
 % \RHD
 \usepackage[nointegrals]{wasysym}
 \usepackage{xcolor}
+
+% change font
+\renewcommand{\familydefault}{\sfdefault}
+
+% remove indent
+\setlength\parindent{0pt}
+
+% theorems
+\newtheorem{thm}{Theorem}
+\newtheorem{prop}[thm]{Proposition}
+\newtheorem{lem}[thm]{Lemma}
+
+% https://tex.stackexchange.com/a/391446/132298
+\newtheorem{manuallemmainner}{Lemma}
+\newenvironment{manuallemma}[1]{%
+  \renewcommand\themanuallemmainner{#1}%
+  \manuallemmainner
+}{\endmanuallemmainner}
 
 \newcommand{\ignore}[1]{}
 \newcommand{\todo}[1]{\colorbox{red}{#1}}
@@ -16,10 +41,12 @@
 
 \renewcommand{\implies}{\Rightarrow}
 \renewcommand{\impliedby}{\Leftarrow}
+\newcommand{\declCtx}{\Uppsi}
 \newcommand{\rcd}[1]{\{#1\}}
 \newcommand{\B}{\mathcal{B}}
 \newcommand{\C}{\mathcal{C}}
 \newcommand{\D}{\mathcal{D}}
+\newcommand{\rowall}{\rotatebox[origin=c]{180}{\(\mathsf{R}\)}}
 \newcommand{\rowvar}{\alpha_\rho}
 \newcommand{\bottom}{\perp}
 \newcommand{\define}{::=}
@@ -27,7 +54,8 @@
 \newcommand{\subsume}{<:}
 \newcommand{\synthesizes}{\Rightarrow \!\!\! \Rightarrow}
 \newcommand{\app}{\bullet}
-\newcommand{\prj}{\,\pmb{\#}\,}
+\newcommand{\prjSymbol}{.}
+\newcommand{\prj}{\,\prjSymbol\,}
 \newcommand{\instLSymbol}{\;\substack{<\\:=}\;}
 \newcommand{\instRSymbol}{\;\substack{<\\=:}\;}
 \newcommand{\ev}{\hat}
@@ -474,15 +502,17 @@ An extension of \emph{Complete and Easy}'s declarative type system.
 \subsection{Terms}
 
 \[
-  \begin{array}{lcl}
-    e & \define & x \\
-      & | & () \\
-      & | & \rcd{} \\
-      & | & \lambda x. e  \\
-      & | & e e \\
-      & | & (e : A) \\
-      & | & \rcd{\ell_1 : e_1, \dots, \ell_k : e_k} \\
-      & | & (e)
+  \begin{array}{llcl}
+    \text{Terms} & e & \define & x \\
+                 & & | & () \\
+                 & & | & \rcd{} \\
+                 & & | & \lambda x \to e  \\
+                 & & | & e e \\
+                 & & | & (e : A) \\
+                 & & | & \rcd{\ell_1 : e_1, \dots, \ell_k : e_k} \\
+                 & & | & e \prjSymbol \ell \\
+                 & & | & (e) \\
+   \text{Labels} & \ell & \define & \{abcdefghijklmnopqrstuvwxyz\}^+
   \end{array}
 \]
 
@@ -496,6 +526,7 @@ An extension of \emph{Complete and Easy}'s declarative type system.
     \text{Types} & A, B, C & \define & \B \\
                       & & | & \alpha \\
                       & & | & \forall \alpha. A \\
+                      & & | & \rowall \rowvar. A \\
                       & & | & A \to B \\
                       & & | & \rcd{R} \\
     \text{Monotypes} & \tau, \sigma & \define & \B \\
@@ -510,58 +541,66 @@ An extension of \emph{Complete and Easy}'s declarative type system.
   \end{array}
 \]
 
+\subsubsection{A note on quantifiers}
+We distinguish \(\forall\) from \(\rowall\), where the former is a quantifier
+over type variables and the latter is a quantifier over row variables.
+
 \subsection{Contexts}
 \[
   \begin{array}{lcl}
-    \Psi & \define & \cdot \\
-         & | & \Psi, \alpha \\
-         & | & \Psi, \rowvar \\
-         & | & \Psi, x : A
+    \declCtx & \define & \cdot \\
+         & | & \declCtx, \alpha \\
+         & | & \declCtx, \rowvar \\
+         & | & \declCtx, x : A
     
   \end{array}
 \]
 
 \subsection{Well-formedness}
 
-The judgement \(\wf \Psi A\) asserts that in the context \(\Psi\), \(A\) is
-well-formed. We will make an abuse of notation and have \(\wf \Psi R\) apply to
+The judgement \(\wf \declCtx A\) asserts that in the context \(\declCtx\), \(A\) is
+well-formed. We will make an abuse of notation and have \(\wf \declCtx R\) apply to
 rows as well, even though they are not really types.
 
 \[
   \deduct[(DeclUVarWF)]
-  {\alpha \in \Psi}
-  {\wf{\Psi}{\alpha}}
+  {\alpha \in \declCtx}
+  {\wf{\declCtx}{\alpha}}
   \spc
   \deduct[(DeclBaseWF)]
   {}
-  {\wf{\Psi}{\B}}
+  {\wf{\declCtx}{\B}}
+  \spc
+  \deduct[(DeclArrowWF)]
+  {\wf \declCtx A \spc \wf \declCtx B}
+  {\wf \declCtx {A \to B}}
 \]
 \[
-  \deduct[(DeclArrowWF)]
-  {\wf \Psi A \spc \wf \Psi B}
-  {\wf \Psi {A \to B}}
-  \spc
   \deduct[(DeclForallWF)]
-  {\wf{\Psi, \alpha}{A}}
-  {\wf \Psi {\forall \alpha. A}}
+  {\wf{\declCtx, \alpha}{A}}
+  {\wf \declCtx {\forall \alpha. A}}
+  \spc
+  \deduct[(DeclForallRowWF)]
+  {\wf{\declCtx, \rowvar}{A}}
+  {\wf \declCtx {\rowall \rowvar. A}}
   \spc
   \deduct[(DeclRecordWF)]
-  {\wf \Psi R}
-  {\wf \Psi {\rcd{R}}}
+  {\wf \declCtx R}
+  {\wf \declCtx {\rcd{R}}}
 \]
 
 \[
   \deduct[(DeclRowNilWF)]
   {}
-  {\wf \Psi \cdot}
+  {\wf \declCtx \cdot}
   \spc
   \deduct[(DeclRowVarWF)]
-  {\rowvar \in \Psi}
-  {\wf \Psi \rowvar}
+  {\rowvar \in \declCtx}
+  {\wf \declCtx \rowvar}
   \spc
   \deduct[(DeclRowWF)]
-  {\wf \Psi A \spc \wf \Psi R}
-  {\wf \Psi {\ell : A, R}}
+  {\wf \declCtx A \spc \wf \declCtx R}
+  {\wf \declCtx {\ell : A, R}}
 \]
 
 % Error in Complete and Easy
@@ -575,17 +614,17 @@ rows as well, even though they are not really types.
 % By Lemma 4, this implies \(\wf{\cdot}{\beta}\) which is not true.
 
 \subsection{Subtyping}
-We'll also make an abuse of notation and have the judgement \(\subtypes{\Psi}{R_1}{R_2}\) be valid for subtyping.
+We'll also make an abuse of notation and have the judgement \(\subtypes{\declCtx}{R_1}{R_2}\) be valid for subtyping.
 
 TODO: add the rules from complete and easy.
 \[
   \deduct[(\(\subtype\) RowNil)]
   {}
-  {\subtypes{\Psi}{\cdot}{\cdot}}
+  {\subtypes{\declCtx}{\cdot}{\cdot}}
   \spc
   \deduct[(\(\subtype\) RowVar)]
   {}
-  {\subtypes{\Psi}{\rowvar}{\rowvar}}
+  {\subtypes{\declCtx}{\rowvar}{\rowvar}}
 \]
 
 We treat the rows sort of as sets and reorder the labels appropriately to match
@@ -593,15 +632,171 @@ them.
 
 \[
   \deduct[(\(\subtype\) Row)]
-  {\subtypes{\Psi}{A}{B} \spc \subtypes{\Psi}{R_1}{R_2}}
-  {\subtypes \Psi {\ell : A, R_1}{\ell : B, R_2}}
+  {\subtypes{\declCtx}{A}{B} \spc \subtypes{\declCtx}{R_1}{R_2}}
+  {\subtypes \declCtx {\ell : A, R_1}{\ell : B, R_2}}
   \spc
   \deduct[(\(\subtype\) \text{Rcd})]
-  {\subtypes \Psi R_1 R_2}
-  {\subtypes {\Psi} {\rcd{R_1}} {\rcd{R_2}}}
-  \deduct[(\(\subtype\forall\)L Rcd)]
-  {\wf \Psi \rho \spc \subtypes \Psi {[\alpha \mapsto \rho]A} B }
-  {\wf \Psi }
+  {\subtypes \declCtx R_1 R_2}
+  {\subtypes {\declCtx} {\rcd{R_1}} {\rcd{R_2}}}
 \]
+\[
+  \deduct[(\(\subtype\rowall\)L Rcd)]
+  {\wf \declCtx \rho \spc \subtypes \declCtx {[\rowvar \mapsto \rho]\rcd{R_1}} {\rcd{R_2}} }
+  {\wf \declCtx \rowall \rowvar. \rcd{R_1} \le \rcd{R_2}}
+  \spc
+  \deduct[(\(\subtype\rowall\)R Rcd)]
+  {\subtypes {\declCtx,\beta} {\rcd{R_1}} {\rcd{R_2}} }
+  {\subtypes \declCtx {\rcd{R_1}} {\rowall \rowvar. \rcd{R_2}} }
+\]
+
+\subsection{Proof Extensions}
+
+We only provide the cases pertaining to the extensions, as the rest of the proof
+remains the same as in \textit{Complete and Easy}.
+
+Note: we'll be sort of conflating row variables (\(\rowvar\)) with type
+variables (\(\alpha\)) because they are symmetric and also disjoint. We do our
+best to visually distinguish the two, but when we prove something involving type
+variables, we mean for both type and row variables unless otherwise noted. The
+same is true of \(\tau\) and \(\rho\).
+
+\subsubsection{Properties of Well-Formedness}
+\begin{prop}[Weakening]
+  If \(\wf \declCtx A\), then \(\wf \declCtx {\declCtx'} A\) by a derivation of
+  the same size.
+\end{prop}
+
+This still follows by straightforward induction on the cases we have added.
+
+\begin{prop}[Substitution]
+  If \(\wf \declCtx A\) and \(\wf {\declCtx, \alpha, \declCtx'} B\), then \(\wf
+  {\declCtx, \declCtx'} {[\alpha \mapsto A] B}\).
+\end{prop}
+
+\begin{proof}
+The proof is by induction on \(B\).
+\begin{itemize}
+\item Case \(B = R\).
+
+  If \(\rowvar\) isn't the row tail of \(R\) (i.e. is not at the ``surface
+  level'' of the row), then it follows from the inductive hypothesis that \(\wf
+  {\declCtx, \declCtx'} R\).
+
+  If \(\rowvar\) does occur in \(R\), then the substitution extends \(R\) with
+  the row \(A\). Suppose \(A = \ell_1: A_1, \dots, \ell_k: A_k\). Because \(\wf
+  \declCtx A\), we know that by DeclRowWF, \(\wf \declCtx A_i\) for \(1 \le i
+  \le k\). By proposition 1, \(\wf {\declCtx, \declCtx'} A_i\) for \(1 \le i \le
+  k\), and thus by DeclRowWF \(\wf {\declCtx, \declCtx'} [\rowvar \mapsto A]B\).
+
+\item Case \(B = \rowall \rowvar. A\).
+
+  This follows immediately by the inductive hypothesis after applying
+  DeclForallRowWF.
+
+\item Case \(B = \rcd{R}\).
+
+  This follows from Case \(B = R\).
+\end{itemize}
+\end{proof}
+
+\begin{manuallemma}{2.5}[Row Formedness]
+  If \(\wf \declCtx {\ell_1 : A_1, \dots, \ell_k : A_k}\), then \(\wf \declCtx
+  {\ell_1 : A_1, \dots, \ell_i : A_i}\) and \(\wf \declCtx A_i\) for all \(1 \le
+  i \le k\).
+\end{manuallemma}
+
+This follows from DeclRowWF by induction.
+
+\subsubsection{Reflexivity}
+\begin{lem}[Reflexivity of Declarative Subtyping]
+  Subtyping is reflexive: if \(\wf \declCtx A \) then \(\subtypes \declCtx A
+  A\).
+\end{lem}
+
+\begin{proof}
+The proof is by induction on \(A\).
+
+\begin{itemize}
+\item Case \(A = \rowall \rowvar. A_0\). This follows by the same reasoning for
+  \(\forall\).
+\item Case \(A = \ell_1 : A_1, \dots, \ell_k : A_k\). By the inductive
+  hypothesis, \(\ell_1 : A_1, \dots, \ell_{k-1} : A_{k-1}\) subtypes itself.
+  Also by the inductive hypothesis, \(\ell_k : A_k \le \ell_k : A_k\). These
+  combined with \(\le\) Row complete the proof.
+\item Case \(A = \rcd{R}\). This follows from the row case.
+\end{itemize}
+  
+\end{proof}
+
+\subsubsection{Subtyping Implies Well-Formedness}
+
+\begin{lem}[Well-Formedness]
+  If \(\subtypes \declCtx A B\) then \(\wf \declCtx A\) and \(\wf \declCtx B\).
+\end{lem}
+
+\begin{proof}
+  The proof is by induction on the derivation.
+  \begin{itemize}
+  \item Case \(\subtypes \declCtx {\ell : A, R_1} {\ell : B, R_2}\).
+
+    By the hypothesis, \(\subtypes \declCtx A B\) and \(\subtypes \declCtx R_1
+    R_2\). From the inductive hypothesis, we get \(\wf \declCtx {A; B; R_1;
+      R_2}\). We may then apply DeclRowWF to conclude that \(\wf \declCtx {\ell
+      : A, R_1}\) and \(\wf \declCtx {\ell : B, R_2}\), as desired.
+  \item Case ForallRowL and ForallRowR. Symmetric to the ForallL and ForallR
+    cases.
+  \item Case \(\subtypes \declCtx {\rcd{R_1} {\rcd{R_2}}}\). Follows from the
+    row case and DeclRecordWF.
+  \end{itemize}
+\end{proof}
+
+\subsubsection{Substitution}
+
+\begin{lem}[Substitution]
+  If \(\wf \declCtx \tau\) and \(\subtypes {\declCtx, \alpha, \declCtx'} A B\),
+  then \(\subtypes {\declCtx, [\alpha \mapsto \tau]\declCtx'} {[\alpha \mapsto
+    \tau] A} {[\alpha \mapsto \tau]B}\).
+\end{lem}
+
+\begin{proof}
+  The proof is by induction on the derivation.
+  \begin{itemize}
+  \item Case \(\subtypes \declCtx {\ell : A, R_1} {\ell : B, R_2}\).
+
+    By the inductive hypothesis, \(\subtypes {\declCtx, [\alpha \mapsto
+      \tau]\declCtx'} {[\alpha \mapsto \tau] R_1} {[\alpha \mapsto \tau]R_2}\)
+    and \(\subtypes {\declCtx, [\alpha \mapsto \tau]\declCtx'} {[\alpha \mapsto
+      \tau] A} {[\alpha \mapsto \tau]B}\). By \(\le\) Row, we conclude that
+    \[\subtypes {\declCtx,[\alpha \mapsto \tau]\declCtx' } {\ell : [\alpha
+        \mapsto \tau]A, [\alpha \mapsto \tau]R_1}{\ell : [\alpha \mapsto \tau]B,
+      [\alpha \mapsto \tau]R_2}\]
+  which, by definition of substitution, gives the desired result.
+  \end{itemize}
+\end{proof}
+
+\subsubsection{Transitivity}
+\begin{lem}[Transitivity of Declarative Subtyping]
+  If \(\subtypes \declCtx A B\) and \(\subtypes \declCtx B C\) then \(\subtypes
+  \declCtx A C\).
+\end{lem}
+
+\begin{proof}
+  We induct on a similar metric used in the proof in \textit{Complete and Easy}.
+  \[\langle \#\forall(B), \quad \#\rowall(B), \quad \mathcal{D}_1 + \mathcal{D}_2 \rangle\]
+  where \(\#\forall\) is the count of quantifiers and \(\#\rowall\) is the count
+  of row quantifiers. The last part is the size of each of the respective
+  derviations in the hypothesis.
+
+  \todo{TODO: reconcile the new metric and add in the rest of the cases that are
+    affected by it.}
+  \begin{itemize}
+  \item Case \(\subtypes \declCtx {\ell : A, R_1} {\ell : B, R_2}\) and
+    \(\subtypes \declCtx {\ell : B, R_2} {\ell : C, R_3}\). By the inductive
+    hypothesis, \(\subtypes \declCtx R_1 R_2\) and \(\subtypes \declCtx R_2
+    R_3\) implies \(\subtypes \declCtx R_1 R_3\). Similarly, we can conclude
+    that \(\subtypes \declCtx A C\). Using these judgements, we can apply
+    DeclRowWF to conclude the desired.
+  \end{itemize}
+\end{proof}
 
 \end{document}
