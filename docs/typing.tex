@@ -72,6 +72,11 @@
 \newcommand{\subtype}{\le}
 \newcommand{\subtypes}[3]{#1 \vdash #2 \le #3}
 
+\newcommand{\declSynth}[3]{#1 \vdash #2 \Rightarrow #3}
+\newcommand{\declCheck}[3]{#1 \vdash #2 \Leftarrow #3}
+\newcommand{\declApSynth}[4]{#1 \vdash #2 \app #3 \synthesizes #4}
+\newcommand{\declLookup}[4]{#1 \vdash #2 \# #3 \longrightarrow #4}
+
 \newcommand{\synth}[4]{#1 \vdash #2 \Rightarrow #3 \dashv #4}
 \renewcommand{\check}[4]{#1 \vdash #2 \Leftarrow #3 \dashv #4}
 
@@ -83,6 +88,8 @@
 \newcommand{\instR}[4]{#1 \vdash #2 \instRSymbol #3 \dashv #4}
 
 \newcommand{\lookup}[5]{#1 \vdash #2 \# #3 \longrightarrow #4 \dashv #5}
+
+\newcommand{\extends}{\longrightarrow}
 
 \newcommand{\deduct}[3][]
 {
@@ -376,11 +383,11 @@ intersection and difference of the rows.
 
 \[
   \deduct[(RowMissingL)]
-  {\instL{\Gamma}{\eva}{r}{\Delta}}
+  {\instL{\Gamma[\eva]}{\eva}{r}{\Delta}}
   {\subsumes{\Gamma[\eva], \cdot}{\eva}{r}{\Delta}}
   \spc
   \deduct[(RowMissingR)]
-  {\instR{\Gamma}{r}{\eva}{\Delta}}
+  {\instR{\Gamma[\eva]}{r}{\eva}{\Delta}}
   {\subsumes{\Gamma[\eva], \cdot}{r}{\eva}{\Delta}}
 \]
 
@@ -391,7 +398,7 @@ EVars (the order doesn't matter).
   \deduct[(RowMissingLR)]
   {\subsumes{\Gamma}{\eva}{m_1 : B_1, m_2 : B_2, \dots}{\Theta} \spc
     \subsumes{\Theta}{\ell_1 : \apply\Theta A_1, \ell_2 : \apply\Theta A_2,
-      \dots}{\evb}{\delta}}
+      \dots}{\evb}{\Delta}}
   {\subsumes{\Gamma[\eva][\evb]}{\ell_1 : A_1, \ell_2 : A_2, \dots, \eva}{m_1 :
       B_1, m_2 : B_2, \dots, \evb}{\Delta}}
 \]
@@ -439,7 +446,7 @@ depending on the type of instantiation (left or right, respectively).
   {
     \begin{array}{l}
      \instL{\Gamma_0[(\eva[k+1]), \eva[k], \dots, \eva[1], \eva=\{\ell_1 : \eva[1],
-      \ell_2 : \eva[2], \dots, \eva[k], (\eva[k+1])\}]}{\eva[1]}{A_1}{\Gamma_1} \\
+      \ell_2 : \eva[2], \dots, \ell_k : \eva[k], (\eva[k+1])\}]}{\eva[1]}{A_1}{\Gamma_1} \\
     \instL{\Gamma_1}{\eva[2]}{\apply{\Gamma_1} A_2}{\Gamma_2} \spc \cdots \spc
      (\instL{\Gamma_k}{\eva[k+1]}{\apply{\Gamma_k}\evb}{\Delta})
   \end{array}
@@ -479,7 +486,7 @@ in the record. If there isn't, assume that \(\Delta = \Gamma_k\).
   {
     \begin{array}{l}
      \instR{\Gamma_0[(\eva[k+1]), \eva[k], \dots, \eva[1], \eva=\{\ell_1 : \eva[1],
-      \ell_2 : \eva[2], \dots, \eva[k], (\eva[k+1])\}]}{A_1}{\eva[1]}{\Gamma_1} \\
+      \ell_2 : \eva[2], \dots, \ell_k : \eva[k], (\eva[k+1])\}]}{A_1}{\eva[1]}{\Gamma_1} \\
     \instR{\Gamma_1}{\apply{\Gamma_2} A_2}{\eva[2]}{\Gamma_3} \spc \cdots \spc
      (\instR{\Gamma_k}{\evb}{\eva[k+1]}{\Delta})
   \end{array}
@@ -603,16 +610,6 @@ rows as well, even though they are not really types.
   {\wf \declCtx {\ell : A, R}}
 \]
 
-% Error in Complete and Easy
-% \[
-%   \begin{prooftree}
-%     \hypo{\beta \in \cdot, \beta}
-%     \infer1{\wf{\cdot, \beta}{\beta \le \beta}}
-%     \infer1{\wf{\cdot}{\beta \le \forall \beta. \beta}}
-%   \end{prooftree}
-% \]
-% By Lemma 4, this implies \(\wf{\cdot}{\beta}\) which is not true.
-
 \subsection{Subtyping}
 We'll also make an abuse of notation and have the judgement \(\subtypes{\declCtx}{R_1}{R_2}\) be valid for subtyping.
 
@@ -623,7 +620,7 @@ TODO: add the rules from complete and easy.
   {\subtypes{\declCtx}{\cdot}{\cdot}}
   \spc
   \deduct[(\(\subtype\) RowVar)]
-  {}
+  {\rowvar \in \declCtx}
   {\subtypes{\declCtx}{\rowvar}{\rowvar}}
 \]
 
@@ -645,8 +642,64 @@ them.
   {\wf \declCtx \rowall \rowvar. \rcd{R_1} \le \rcd{R_2}}
   \spc
   \deduct[(\(\subtype\rowall\)R Rcd)]
-  {\subtypes {\declCtx,\beta} {\rcd{R_1}} {\rcd{R_2}} }
+  {\wf \declCtx {\rcd{R_1}} \spc \subtypes {\declCtx,\beta} {\rcd{R_1}} {\rcd{R_2}} }
   {\subtypes \declCtx {\rcd{R_1}} {\rowall \rowvar. \rcd{R_2}} }
+\]
+
+\subsection{Declarative Typing}
+
+\subsubsection{Judgements}
+
+\(\declCheck \declCtx e A\), Under context \(\declCtx\), \(e\) checks against
+type \(A\).
+
+\(\declSynth \declCtx e A\), Under context \(\declCtx\), \(e\) synthesizes type
+\(A\).
+
+\(\declApSynth \declCtx A e C\), Under context \(\declCtx\) type \(A\) applied
+to \(e\) synthesizes type \(C\).
+
+\(\declLookup \declCtx A \ell C\), under context \(\declCtx\) type \(A\)
+projects type \(C\) at \(\ell\).
+
+\subsubsection{Rules}
+
+\todo{Add the rest of the declarative rules}
+
+\[
+  \deduct[(Decl RcdI)]
+  {\declCheck \declCtx e A \spc \declCheck \declCtx r \rcd{R}}
+  {\declCheck \declCtx {\rcd{\ell : e, r}} {\rcd{\ell : A, R}}}
+  \spc
+  \deduct[(Decl RcdI \(\Rightarrow\))]
+  {\declSynth \declCtx e A \spc \declSynth \declCtx r \rcd{R}}
+  {\declSynth \declCtx {\rcd{\ell : e, r}} {\rcd{\ell : A, R}}}
+\]
+
+\[
+  \deduct[(Decl \(\rowall\)I)]
+  {\declCheck {\declCtx, \rowvar} e A}
+  {\declCheck \declCtx e {\rowall \rowvar. A}}
+  \spc
+  \deduct[(DeclPrjI)]
+  {\declSynth \declCtx e A \spc \declLookup \declCtx A \ell C}
+  {\declSynth \declCtx {e.\ell} C}
+\]
+
+\[
+  \deduct[(Decl Lookup)]
+  {}
+  {\declLookup \declCtx {\rcd{\ell : C, R}} \ell C}
+  \spc
+  \deduct[(Decl \(\rowall\) Lookup)]
+  {\wf \declCtx \rho \spc \declLookup \declCtx {[\rowvar \mapsto \rho]A} \ell C}
+  {\declLookup \declCtx {\rowall \rowvar. A} \ell C}
+\]
+
+\[
+  \deduct[(Decl \(\forall\) Lookup)]
+  {\wf \declCtx \tau \spc \declLookup \declCtx {[\alpha \mapsto \tau]A} \ell C}
+  {\declLookup \declCtx {\forall \alpha. A} \ell C}
 \]
 
 \subsection{Proof Extensions}
@@ -662,7 +715,7 @@ same is true of \(\tau\) and \(\rho\).
 
 \subsubsection{Properties of Well-Formedness}
 \begin{prop}[Weakening]
-  If \(\wf \declCtx A\), then \(\wf \declCtx {\declCtx'} A\) by a derivation of
+  If \(\wf \declCtx A\), then \(\wf {\declCtx, \declCtx'} A\) by a derivation of
   the same size.
 \end{prop}
 
@@ -670,7 +723,7 @@ This still follows by straightforward induction on the cases we have added.
 
 \begin{prop}[Substitution]
   If \(\wf \declCtx A\) and \(\wf {\declCtx, \alpha, \declCtx'} B\), then \(\wf
-  {\declCtx, \declCtx'} {[\alpha \mapsto A] B}\).
+  {\declCtx, [\alpha \mapsto A] \declCtx'} {[\alpha \mapsto A] B}\).
 \end{prop}
 
 \begin{proof}
@@ -798,5 +851,153 @@ The proof is by induction on \(A\).
     DeclRowWF to conclude the desired.
   \end{itemize}
 \end{proof}
+
+\subsubsection{Invertibility of \(\le \forall\)R}
+\begin{lem}[Invertibility]
+  If \(\mathcal{D}\) derives \(\subtypes \declCtx A {\forall \beta. B}\), then
+  \(\mathcal{D}'\) derives \(\subtypes {\declCtx, \beta} A B\) where \(\mathcal
+  D ' < \mathcal D\).
+\end{lem}
+
+\section{Algorithmic System Proof Extensions}
+
+\subsection{Context Extension}
+
+\subsubsection{Syntactic Properties}
+
+Most (all?) of these proofs remain unchanged due to the fact that we haven't
+done much to significantly alter the framework (although we have added a new
+kind of evar, it functions much the same way).
+
+\subsubsection{Instantiation Extends}
+
+\begin{manuallemma}{32}[Instantiation Extends]
+  If \(\instL \Gamma \eva \tau \Delta\) or \(\instR \Gamma \tau \eva \Delta\),
+  then \(\Gamma \extends \Delta\).
+\end{manuallemma}
+
+\begin{proof}
+  \begin{itemize}
+  \item Case InstLRcd and InstRRcd: We'll employ a similar approach to the one
+    used in Case InstLArr. We want to derive \(\Gamma_0[\eva] \extends \Delta\).
+
+    Our IH gives us, by a lot of transitivity (which requires an inductive
+    proof), that
+      \[\Gamma_0[(\eva[k+1]),\eva[k],\dots,\eva[1],\eva = \{\ell_1 : \eva[1],
+        \ell_2 : \eva[2], \dots, \ell_k : \eva[k], (\eva[k+1])\}] \extends \Delta\]
+
+      We can employ a series of Lemma 28 (Unsolved Variable Addition for
+      Extension), one Lemma 26 (Solution Admissibility for Extension), and
+      transitivity to obtain
+    \[\Gamma_0 \extends \Gamma_0[(\eva[k+1]),\eva[k],\dots,\eva[1],\eva = \{\ell_1 : \eva[1],
+      \ell_2 : \eva[2], \dots, \ell_k : \eva[k], (\eva[k+1])\}]\],
+    which, by the above and transitivity gives the desired.
+  \end{itemize}
+\end{proof}
+
+\subsubsection{Subtyping Extends}
+
+\begin{manuallemma}{33}[Subtyping Extension]
+  If \(\subsumes \Gamma A B \Delta\), then \(\Gamma \extends \Delta\).
+\end{manuallemma}
+\begin{proof}
+  By induction on the derivation.
+  \begin{itemize}
+  \item Case Record: Follows immediately from the IH
+  \item Case Row: Follows from IH and transitivity. \(\Gamma \extends \Theta\)
+    and \(\Theta \extends Delta\) implies the desired.
+  \item Case Row Nil: Follows immediately from \(\Gamma\) being unchanged.
+  \item Case RowMissingL and RowMissingR: Follows from instantiation extending.
+  \item Case RowMissingLR: Follows from transitivity.
+  \item Case RowTailReach: Follows from Lemma 28 (Solution Admissibility for
+    Extension).
+  \end{itemize}
+\end{proof}
+
+\subsection{Decidability of Instantiation}
+\todo{fill in more specific details}
+\begin{manuallemma}{34}[Left Unsolvedness Preservation]
+  If \(\instL {\underbrace{\Gamma_0, \eva, \Gamma_1}_{\Gamma}} \eva A \Delta\) or
+  \(\instR {\underbrace{\Gamma_0, \eva, \Gamma_1}_{\Gamma}} A \eva \Delta\), and
+  \(\evb \in \mathsf{unsolved}(\Gamma_0), then \evb \in
+  \mathsf{unsolved}(\Delta)\).
+\end{manuallemma}
+
+\begin{proof}
+  The proof for the cases InstLRcd and InstRRcd follow from the same technique
+  used for InstLArr.
+\end{proof}
+
+\begin{manuallemma}{35}[Left Free Variable Preservation]
+\end{manuallemma}
+
+\begin{manuallemma}{36}[Instantiation Size Preservation]
+\end{manuallemma}
+
+The proofs for the above are also similar.
+
+\begin{thm}[Decidability of Instantiation]
+\end{thm}
+
+Follows from the lemmas with a similar technique to InstLArr.
+
+\section{\emph{Complete and Easy} Errata}
+
+A collection of minor errata from \emph{Complete and Easy} found while writing
+this document. We use the authors' notations in this section, if ever we differ.
+
+\textbf{\(\le \forall\) R, Declarative}
+
+The rule, as stated:
+\[
+  \deduct[\(\le \forall\)R]
+  {\subtypes {\declCtx, \beta} A B}
+  {\subtypes \declCtx A {\forall \beta. B}}
+\]
+
+The problem:
+\[
+  \begin{prooftree}
+    \hypo{\beta \in \cdot, \beta}
+    \infer1{\wf{\cdot, \beta}{\beta \le \beta}}
+    \infer1{\wf{\cdot}{\beta \le \forall \beta. \beta}}
+  \end{prooftree}
+\]
+By Lemma 4, this implies \(\wf{\cdot}{\beta}\) which is not true.
+
+The fix:
+\[
+  \deduct[\(\le \forall\)R Fixed]
+  {\wf \declCtx A \spc \subtypes {\declCtx, \beta} A B}
+  {\subtypes \declCtx A {\forall \beta. B}}
+\]
+
+\textbf{Poposition 2, Substitution}
+
+There is a missing \([A/\alpha]\) on the context (as done in later rules, e.g.
+A4, Substitution). 
+
+The fix:
+
+Write as the conclusion
+\[
+  \wf {\declCtx, [A/\alpha]\declCtx'} {[A/\alpha]B}.
+\]
+
+\textbf{Proof of A5, Transitivity}
+
+There is a spurious \(\wf \declCtx \tau\) in the \(\le \forall\) R case.
+
+\textbf{Lemma 19, Extension Equality Preservation}
+
+In case AddSolved, the line
+
+\textit{We implicity assume that \(\Delta'\) is well-formed, so \(\ev \alpha \notin
+\mathsf{dom}(\Delta')\).}
+
+is not quite correct. The line should be
+
+\textit{We implicity assume that \(\Delta', \ev \alpha = \tau\) is well-formed,
+  so \(\ev \alpha \notin \mathsf{dom}(\Delta')\).}
 
 \end{document}
