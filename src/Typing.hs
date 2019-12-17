@@ -57,6 +57,7 @@ subsumes ctx (EVar a) t2 = do
 subsumes ctx t1 (EVar a) = do
   when (a `elem` freeEVars t1) . throwError $ "EVar " <> a <> " is free in type " <> show t1 <> "."
   instantiateR ctx t1 a
+-- Rcd
 subsumes ctx (TRcd row1) (TRcd row2) = subsumesRow ctx row1 row2
 -- Fallthrough case (failure)
 subsumes ctx t1 t2 = throwError $ "Type " <> show t1 <> "does not subsume type " <> show t2 <> "."
@@ -82,7 +83,7 @@ subsumesRow ctx r1@Row{rowMap=rm1, rowTail=rt1} r2@Row{rowMap=rm2, rowTail=rt2} 
 -- subsumption for rows !!!
 instantiateRowTail :: Context -> TailVarname -> Row Type -> InferM Context
 instantiateRowTail ctx a Row{rowMap=rm, rowTail=rt} = do
-  newRowMapEVars <- sequence (freshEVar <$ rm)
+  newRowMapEVars <- traverse (const freshEVar) rm
   newRowTail     <- traverse (const freshEVar) rt
   let newElems = (CtxEVar <$> M.elems newRowMapEVars) <> maybe [] (pure . CtxTailVar) newRowTail
   ctx'           <- insertBefore (CtxTailVar a) newElems ctx
