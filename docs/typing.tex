@@ -113,32 +113,6 @@ encompass record types.
 Future work may include extending to full(er) subtyping, as well as variant
 types.
 
-\section{Grammar}
-
-\subsection{Types}
-\[\begin{array}{rcl}
-\B & \define & \texttt{Num} \mid \texttt{Bool} \mid \cdots
-\\
-% c & \define & \bottom \mid \tau \mid \top
-% \\
-A & \define & \B \mid \ev\alpha \mid \alpha \mid \forall \alpha. A \mid A_0 \to A_1 \mid \{R\}
-\\
-\tau & \define & \B \mid \ev\alpha \mid \alpha \mid \tau_0 \to \tau_1 \mid \{\rho\}
-\\
-R & \define & \cdot \mid \ev\alpha \mid \ell : A, R
-\\
-r & \define & \cdot \mid \ell : A, r
-\\
-\rho & \define & \cdot \mid \ev\alpha \mid \ell : \tau, \rho
-\end{array}
-\]
-
-\subsection{Terms}
-TBD
-
-\subsection{Records}
-TBD
-
 \section{Conventions}
 
 We sometimes use $\beta$ and $\gamma$ for type variables in addition
@@ -158,7 +132,250 @@ In record types, we elide the final empty row type
 % resolution to a base case. An implementation of these rules would presumably use
 % something easier, like set difference, to figure out which labels to compare.
 
-\section{Typing Rules}
+
+\section{Extended Declarative Type System}
+An extension of \emph{Complete and Easy}'s declarative type system.
+
+\subsection{Terms}
+
+\[
+  \begin{array}{llcll}
+    \text{Terms} & e & \define & x & \text{Variable} \\
+                 & & | & () & \text{1} \\
+                 & & | & \rcd{} & \text{Empty record}\\
+                 & & | & \lambda x \to e  & \text{Lambda} \\
+                 & & | & e\ e & \text{Application} \\
+                 & & | & (e : A) & \text{Type annotation}\\
+                 & & | & \rcd{\ell_1 : e_1, \dots, \ell_k : e_k} & \text{Record}
+    \\
+                 & & | & e \prjSymbol \ell & \text{(Record) Projection} \\
+                 & & | & (e) & \text{Parentheses} \\
+   \text{Labels} & \ell & \define & \{abcdefghijklmnopqrstuvwxyz\}^+
+  \end{array}
+\]
+
+\subsection{Types}
+\[
+  \begin{array}{llcl}
+    \text{Base types} & \B & \define & 1 \\
+                      & & | & \code{Num} \\
+                      & & | & \code{Bool} \\
+                      & & | & \cdots \\
+    \text{Types} & A, B, C & \define & \B \\
+                      & & | & \alpha \\
+                      & & | & \forall \alpha. A \\
+                      & & | & \rowall \rowvar. A \\
+                      & & | & A \to B \\
+                      & & | & \rcd{R} \\
+    \text{Monotypes} & \tau, \sigma & \define & \B \\
+                      & & | & \alpha \\
+                      & & | & \tau \to \sigma \\
+                      & & | & \rcd{\rho} \\
+    \text{Rows} & R & \define & \cdot \\
+                      & & | & \rowvar \\
+                      & & | & \ell : A, R \\
+    \text{Monorows} & \rho & \define & \cdot \\
+                      & & | & \ell : \tau, \rho
+  \end{array}
+\]
+
+\subsubsection{A note on quantifiers}
+We distinguish \(\forall\) from \(\rowall\), where the former is a quantifier
+over type variables and the latter is a quantifier over row variables.
+
+\subsection{Contexts}
+\[
+  \begin{array}{lcl}
+    \declCtx & \define & \cdot \\
+         & | & \declCtx, \alpha \\
+         & | & \declCtx, \rowvar \\
+         & | & \declCtx, x : A
+    
+  \end{array}
+\]
+
+\subsection{Well-formedness}
+
+The judgement \(\wf \declCtx A\) asserts that in the context \(\declCtx\), \(A\) is
+well-formed. We will make an abuse of notation and have \(\wf \declCtx R\) apply to
+rows as well, even though they are not really types.
+
+\[
+  \deduct[(DeclUVarWF)]
+  {\alpha \in \declCtx}
+  {\wf{\declCtx}{\alpha}}
+  \spc
+  \deduct[(DeclBaseWF)]
+  {}
+  {\wf{\declCtx}{\B}}
+  \spc
+  \deduct[(DeclArrowWF)]
+  {\wf \declCtx A \spc \wf \declCtx B}
+  {\wf \declCtx {A \to B}}
+\]
+\[
+  \deduct[(DeclForallWF)]
+  {\wf{\declCtx, \alpha}{A}}
+  {\wf \declCtx {\forall \alpha. A}}
+  \spc
+  \deduct[(DeclForallRowWF)]
+  {\wf{\declCtx, \rowvar}{A}}
+  {\wf \declCtx {\rowall \rowvar. A}}
+  \spc
+  \deduct[(DeclRecordWF)]
+  {\wf \declCtx R}
+  {\wf \declCtx {\rcd{R}}}
+\]
+
+\[
+  \deduct[(DeclRowNilWF)]
+  {}
+  {\wf \declCtx \cdot}
+  \spc
+  \deduct[(DeclRowVarWF)]
+  {\rowvar \in \declCtx}
+  {\wf \declCtx \rowvar}
+  \spc
+  \deduct[(DeclRowWF)]
+  {\wf \declCtx A \spc \wf \declCtx R}
+  {\wf \declCtx {\ell : A, R}}
+\]
+
+\subsection{Subtyping}
+We'll also make an abuse of notation and have the judgement \(\subtypes{\declCtx}{R_1}{R_2}\) be valid for subtyping.
+
+TODO: add the rules from complete and easy.
+\[
+  \deduct[(\(\subtype\) RowNil)]
+  {}
+  {\subtypes{\declCtx}{\cdot}{\cdot}}
+  \spc
+  \deduct[(\(\subtype\) RowVar)]
+  {\rowvar \in \declCtx}
+  {\subtypes{\declCtx}{\rowvar}{\rowvar}}
+\]
+
+We treat the rows sort of as sets and reorder the labels appropriately to match
+them.
+
+\[
+  \deduct[(\(\subtype\) Row)]
+  {\subtypes{\declCtx}{A}{B} \spc \subtypes{\declCtx}{R_1}{R_2}}
+  {\subtypes \declCtx {\ell : A, R_1}{\ell : B, R_2}}
+  \spc
+  \deduct[(\(\subtype\) \text{Rcd})]
+  {\subtypes \declCtx R_1 R_2}
+  {\subtypes {\declCtx} {\rcd{R_1}} {\rcd{R_2}}}
+\]
+\[
+  \deduct[(\(\subtype\rowall\)L Rcd)]
+  {\wf \declCtx \rho \spc \subtypes \declCtx {[\rowvar \mapsto \rho]\rcd{R_1}} {\rcd{R_2}} }
+  {\wf \declCtx \rowall \rowvar. \rcd{R_1} \le \rcd{R_2}}
+  \spc
+  \deduct[(\(\subtype\rowall\)R Rcd)]
+  {\wf \declCtx {\rcd{R_1}} \spc \subtypes {\declCtx,\beta} {\rcd{R_1}} {\rcd{R_2}} }
+  {\subtypes \declCtx {\rcd{R_1}} {\rowall \rowvar. \rcd{R_2}} }
+\]
+
+\subsection{Declarative Typing}
+
+\subsubsection{Judgements}
+
+\(\declCheck \declCtx e A\), Under context \(\declCtx\), \(e\) checks against
+type \(A\).
+
+\(\declSynth \declCtx e A\), Under context \(\declCtx\), \(e\) synthesizes type
+\(A\).
+
+\(\declApSynth \declCtx A e C\), Under context \(\declCtx\) type \(A\) applied
+to \(e\) synthesizes type \(C\).
+
+\(\declLookup \declCtx A \ell C\), under context \(\declCtx\) type \(A\)
+projects type \(C\) at \(\ell\).
+
+\subsubsection{Rules}
+
+\consider{All of the declarative rules from \emph{Complete and Easy} still
+  apply, though they have yet to be added.}
+
+\[
+  \deduct[(Decl RcdI)]
+  {\declCheck \declCtx e A \spc \declCheck \declCtx r \rcd{R}}
+  {\declCheck \declCtx {\rcd{\ell : e, r}} {\rcd{\ell : A, R}}}
+  \spc
+  \deduct[(Decl RcdI \(\Rightarrow\))]
+  {\declSynth \declCtx e A \spc \declSynth \declCtx r \rcd{R}}
+  {\declSynth \declCtx {\rcd{\ell : e, r}} {\rcd{\ell : A, R}}}
+\]
+
+\[
+  \deduct[(Decl \(\rowall\)I)]
+  {\declCheck {\declCtx, \rowvar} e A}
+  {\declCheck \declCtx e {\rowall \rowvar. A}}
+  \spc
+  \deduct[(DeclPrjI)]
+  {\declSynth \declCtx e A \spc \declLookup \declCtx A \ell C}
+  {\declSynth \declCtx {e.\ell} C}
+\]
+
+\[
+  \deduct[(Decl Lookup)]
+  {}
+  {\declLookup \declCtx {\rcd{\ell : C, R}} \ell C}
+  \spc
+  \deduct[(Decl \(\rowall\) Lookup)]
+  {\wf \declCtx \rho \spc \declLookup \declCtx {[\rowvar \mapsto \rho]A} \ell C}
+  {\declLookup \declCtx {\rowall \rowvar. A} \ell C}
+\]
+
+\[
+  \deduct[(Decl \(\forall\) Lookup)]
+  {\wf \declCtx \tau \spc \declLookup \declCtx {[\alpha \mapsto \tau]A} \ell C}
+  {\declLookup \declCtx {\forall \alpha. A} \ell C}
+\]
+
+
+\section{Algorithmic Typing}
+
+\subsection{Notes}
+
+The algorithmic typing, unlike the declarative typing, presently doesn't
+distinguish between rowvars and evars. The two are very similar in nature, and
+so we conflate them in the typing rules. It's just that rowvars can only be
+resolved to rows. This subtle difference is partially reflected in the
+implementaiton of the language: rowvars and evars are separate; however,
+quantifiers are not.
+
+For convenience's sake, these rules will not presently distinguish between
+rowvars and evars, although this may change.
+
+\subsection{Terms}
+
+Terms are the same as in the declarative system.
+
+\subsection{Types}
+
+The main difference in types for the Algorithmic System is the addition of evars
+(\(\eva\)). There are some notational differences too, as a result.
+
+\[\begin{array}{rcl}
+\B & \define & \texttt{Num} \mid \texttt{Bool} \mid \cdots
+\\
+% c & \define & \bottom \mid \tau \mid \top
+% \\
+A & \define & \B \mid \ev\alpha \mid \alpha \mid \forall \alpha. A \mid A_0 \to A_1 \mid \{R\}
+\\
+\tau & \define & \B \mid \ev\alpha \mid \alpha \mid \tau_0 \to \tau_1 \mid \{\rho\}
+\\
+R & \define & \cdot \mid \ev\alpha \mid \ell : A, R
+\\
+r & \define & \cdot \mid \ell : A, r
+\\
+\rho & \define & \cdot \mid \ev\alpha \mid \ell : \tau, \rho
+\end{array}
+\]
+
+\subsection{Typing Rules}
 We define algorithmic typing with the following judgments:
 \[
 \check{\Gamma}{e}{A}{\Delta}
@@ -314,7 +531,7 @@ We define record lookup $\lookup{\Gamma}{\rho}{\ell}{A}{\Delta}$ as follows (inp
   }
 \]
 
-\section{Subsumption}
+\subsection{Subsumption}
 We define the algorithmic subsumption:
 \[
 \subsumes{\Gamma}{A_0}{A_1}{\Delta}
@@ -410,7 +627,7 @@ EVars (the order doesn't matter).
 \]
 
 
-\section{Instantiation}
+\subsection{Instantiation}
 
 Instantiation is a judgement that solves an EVar, either on the left or right
 side of the judgement. It is important to recurisvely assign ``helper'' EVars to
@@ -422,7 +639,7 @@ depending on the type of instantiation (left or right, respectively).
 
 \consider{Need an instantiation for rows that is like InstRcd}
 
-\subsection{Left Instantiation}
+\subsubsection{Left Instantiation}
 
 \[
   \deduct[InstLSolve]
@@ -462,7 +679,7 @@ in the record. If there isn't, assume that \(\Delta = \Gamma_k\).
   { \instL{\Gamma[\eva]}{\eva}{\forall \beta. B}{\Delta} }
 \]
 
-\subsection{Right Instantiation}
+\subsubsection{Right Instantiation}
 
 \[
   \deduct[InstRSolve]
@@ -503,206 +720,7 @@ in the record. If there isn't, assume that \(\Delta = \Gamma_k\).
 \]
 
 
-\section{Extended Declarative Type System}
-An extension of \emph{Complete and Easy}'s declarative type system.
-
-\subsection{Terms}
-
-\[
-  \begin{array}{llcl}
-    \text{Terms} & e & \define & x \\
-                 & & | & () \\
-                 & & | & \rcd{} \\
-                 & & | & \lambda x \to e  \\
-                 & & | & e e \\
-                 & & | & (e : A) \\
-                 & & | & \rcd{\ell_1 : e_1, \dots, \ell_k : e_k} \\
-                 & & | & e \prjSymbol \ell \\
-                 & & | & (e) \\
-   \text{Labels} & \ell & \define & \{abcdefghijklmnopqrstuvwxyz\}^+
-  \end{array}
-\]
-
-\subsection{Types}
-\[
-  \begin{array}{llcl}
-    \text{Base types} & \B & \define & 1 \\
-                      & & | & \code{Num} \\
-                      & & | & \code{Bool} \\
-                      & & | & \cdots \\
-    \text{Types} & A, B, C & \define & \B \\
-                      & & | & \alpha \\
-                      & & | & \forall \alpha. A \\
-                      & & | & \rowall \rowvar. A \\
-                      & & | & A \to B \\
-                      & & | & \rcd{R} \\
-    \text{Monotypes} & \tau, \sigma & \define & \B \\
-                      & & | & \alpha \\
-                      & & | & \tau \to \sigma \\
-                      & & | & \rcd{\rho} \\
-    \text{Rows} & R & \define & \cdot \\
-                      & & | & \rowvar \\
-                      & & | & \ell : A, R \\
-    \text{Monorows} & \rho & \define & \cdot \\
-                      & & | & \ell : \tau, \rho
-  \end{array}
-\]
-
-\subsubsection{A note on quantifiers}
-We distinguish \(\forall\) from \(\rowall\), where the former is a quantifier
-over type variables and the latter is a quantifier over row variables.
-
-\subsection{Contexts}
-\[
-  \begin{array}{lcl}
-    \declCtx & \define & \cdot \\
-         & | & \declCtx, \alpha \\
-         & | & \declCtx, \rowvar \\
-         & | & \declCtx, x : A
-    
-  \end{array}
-\]
-
-\subsection{Well-formedness}
-
-The judgement \(\wf \declCtx A\) asserts that in the context \(\declCtx\), \(A\) is
-well-formed. We will make an abuse of notation and have \(\wf \declCtx R\) apply to
-rows as well, even though they are not really types.
-
-\[
-  \deduct[(DeclUVarWF)]
-  {\alpha \in \declCtx}
-  {\wf{\declCtx}{\alpha}}
-  \spc
-  \deduct[(DeclBaseWF)]
-  {}
-  {\wf{\declCtx}{\B}}
-  \spc
-  \deduct[(DeclArrowWF)]
-  {\wf \declCtx A \spc \wf \declCtx B}
-  {\wf \declCtx {A \to B}}
-\]
-\[
-  \deduct[(DeclForallWF)]
-  {\wf{\declCtx, \alpha}{A}}
-  {\wf \declCtx {\forall \alpha. A}}
-  \spc
-  \deduct[(DeclForallRowWF)]
-  {\wf{\declCtx, \rowvar}{A}}
-  {\wf \declCtx {\rowall \rowvar. A}}
-  \spc
-  \deduct[(DeclRecordWF)]
-  {\wf \declCtx R}
-  {\wf \declCtx {\rcd{R}}}
-\]
-
-\[
-  \deduct[(DeclRowNilWF)]
-  {}
-  {\wf \declCtx \cdot}
-  \spc
-  \deduct[(DeclRowVarWF)]
-  {\rowvar \in \declCtx}
-  {\wf \declCtx \rowvar}
-  \spc
-  \deduct[(DeclRowWF)]
-  {\wf \declCtx A \spc \wf \declCtx R}
-  {\wf \declCtx {\ell : A, R}}
-\]
-
-\subsection{Subtyping}
-We'll also make an abuse of notation and have the judgement \(\subtypes{\declCtx}{R_1}{R_2}\) be valid for subtyping.
-
-TODO: add the rules from complete and easy.
-\[
-  \deduct[(\(\subtype\) RowNil)]
-  {}
-  {\subtypes{\declCtx}{\cdot}{\cdot}}
-  \spc
-  \deduct[(\(\subtype\) RowVar)]
-  {\rowvar \in \declCtx}
-  {\subtypes{\declCtx}{\rowvar}{\rowvar}}
-\]
-
-We treat the rows sort of as sets and reorder the labels appropriately to match
-them.
-
-\[
-  \deduct[(\(\subtype\) Row)]
-  {\subtypes{\declCtx}{A}{B} \spc \subtypes{\declCtx}{R_1}{R_2}}
-  {\subtypes \declCtx {\ell : A, R_1}{\ell : B, R_2}}
-  \spc
-  \deduct[(\(\subtype\) \text{Rcd})]
-  {\subtypes \declCtx R_1 R_2}
-  {\subtypes {\declCtx} {\rcd{R_1}} {\rcd{R_2}}}
-\]
-\[
-  \deduct[(\(\subtype\rowall\)L Rcd)]
-  {\wf \declCtx \rho \spc \subtypes \declCtx {[\rowvar \mapsto \rho]\rcd{R_1}} {\rcd{R_2}} }
-  {\wf \declCtx \rowall \rowvar. \rcd{R_1} \le \rcd{R_2}}
-  \spc
-  \deduct[(\(\subtype\rowall\)R Rcd)]
-  {\wf \declCtx {\rcd{R_1}} \spc \subtypes {\declCtx,\beta} {\rcd{R_1}} {\rcd{R_2}} }
-  {\subtypes \declCtx {\rcd{R_1}} {\rowall \rowvar. \rcd{R_2}} }
-\]
-
-\subsection{Declarative Typing}
-
-\subsubsection{Judgements}
-
-\(\declCheck \declCtx e A\), Under context \(\declCtx\), \(e\) checks against
-type \(A\).
-
-\(\declSynth \declCtx e A\), Under context \(\declCtx\), \(e\) synthesizes type
-\(A\).
-
-\(\declApSynth \declCtx A e C\), Under context \(\declCtx\) type \(A\) applied
-to \(e\) synthesizes type \(C\).
-
-\(\declLookup \declCtx A \ell C\), under context \(\declCtx\) type \(A\)
-projects type \(C\) at \(\ell\).
-
-\subsubsection{Rules}
-
-\todo{Add the rest of the declarative rules}
-
-\[
-  \deduct[(Decl RcdI)]
-  {\declCheck \declCtx e A \spc \declCheck \declCtx r \rcd{R}}
-  {\declCheck \declCtx {\rcd{\ell : e, r}} {\rcd{\ell : A, R}}}
-  \spc
-  \deduct[(Decl RcdI \(\Rightarrow\))]
-  {\declSynth \declCtx e A \spc \declSynth \declCtx r \rcd{R}}
-  {\declSynth \declCtx {\rcd{\ell : e, r}} {\rcd{\ell : A, R}}}
-\]
-
-\[
-  \deduct[(Decl \(\rowall\)I)]
-  {\declCheck {\declCtx, \rowvar} e A}
-  {\declCheck \declCtx e {\rowall \rowvar. A}}
-  \spc
-  \deduct[(DeclPrjI)]
-  {\declSynth \declCtx e A \spc \declLookup \declCtx A \ell C}
-  {\declSynth \declCtx {e.\ell} C}
-\]
-
-\[
-  \deduct[(Decl Lookup)]
-  {}
-  {\declLookup \declCtx {\rcd{\ell : C, R}} \ell C}
-  \spc
-  \deduct[(Decl \(\rowall\) Lookup)]
-  {\wf \declCtx \rho \spc \declLookup \declCtx {[\rowvar \mapsto \rho]A} \ell C}
-  {\declLookup \declCtx {\rowall \rowvar. A} \ell C}
-\]
-
-\[
-  \deduct[(Decl \(\forall\) Lookup)]
-  {\wf \declCtx \tau \spc \declLookup \declCtx {[\alpha \mapsto \tau]A} \ell C}
-  {\declLookup \declCtx {\forall \alpha. A} \ell C}
-\]
-
-\subsection{Proof Extensions}
+\section{Proof Extensions}
 
 We only provide the cases pertaining to the extensions, as the rest of the proof
 remains the same as in \textit{Complete and Easy}.
@@ -713,7 +731,7 @@ best to visually distinguish the two, but when we prove something involving type
 variables, we mean for both type and row variables unless otherwise noted. The
 same is true of \(\tau\) and \(\rho\).
 
-\subsubsection{Properties of Well-Formedness}
+\subsection{Properties of Well-Formedness}
 \begin{prop}[Weakening]
   If \(\wf \declCtx A\), then \(\wf {\declCtx, \declCtx'} A\) by a derivation of
   the same size.
@@ -760,7 +778,7 @@ The proof is by induction on \(B\).
 
 This follows from DeclRowWF by induction.
 
-\subsubsection{Reflexivity}
+\subsection{Reflexivity}
 \begin{lem}[Reflexivity of Declarative Subtyping]
   Subtyping is reflexive: if \(\wf \declCtx A \) then \(\subtypes \declCtx A
   A\).
@@ -781,7 +799,7 @@ The proof is by induction on \(A\).
   
 \end{proof}
 
-\subsubsection{Subtyping Implies Well-Formedness}
+\subsection{Subtyping Implies Well-Formedness}
 
 \begin{lem}[Well-Formedness]
   If \(\subtypes \declCtx A B\) then \(\wf \declCtx A\) and \(\wf \declCtx B\).
@@ -803,7 +821,7 @@ The proof is by induction on \(A\).
   \end{itemize}
 \end{proof}
 
-\subsubsection{Substitution}
+\subsection{Substitution}
 
 \begin{lem}[Substitution]
   If \(\wf \declCtx \tau\) and \(\subtypes {\declCtx, \alpha, \declCtx'} A B\),
@@ -827,7 +845,7 @@ The proof is by induction on \(A\).
   \end{itemize}
 \end{proof}
 
-\subsubsection{Transitivity}
+\subsection{Transitivity}
 \begin{lem}[Transitivity of Declarative Subtyping]
   If \(\subtypes \declCtx A B\) and \(\subtypes \declCtx B C\) then \(\subtypes
   \declCtx A C\).
@@ -852,7 +870,7 @@ The proof is by induction on \(A\).
   \end{itemize}
 \end{proof}
 
-\subsubsection{Invertibility of \(\le \forall\)R}
+\subsection{Invertibility of \(\le \forall\)R}
 \begin{lem}[Invertibility]
   If \(\mathcal{D}\) derives \(\subtypes \declCtx A {\forall \beta. B}\), then
   \(\mathcal{D}'\) derives \(\subtypes {\declCtx, \beta} A B\) where \(\mathcal
@@ -863,13 +881,13 @@ The proof is by induction on \(A\).
 
 \subsection{Context Extension}
 
-\subsubsection{Syntactic Properties}
+\subsection{Syntactic Properties}
 
 Most (all?) of these proofs remain unchanged due to the fact that we haven't
 done much to significantly alter the framework (although we have added a new
 kind of evar, it functions much the same way).
 
-\subsubsection{Instantiation Extends}
+\subsection{Instantiation Extends}
 
 \begin{manuallemma}{32}[Instantiation Extends]
   If \(\instL \Gamma \eva \tau \Delta\) or \(\instR \Gamma \tau \eva \Delta\),
@@ -895,7 +913,7 @@ kind of evar, it functions much the same way).
   \end{itemize}
 \end{proof}
 
-\subsubsection{Subtyping Extends}
+\subsection{Subtyping Extends}
 
 \begin{manuallemma}{33}[Subtyping Extension]
   If \(\subsumes \Gamma A B \Delta\), then \(\Gamma \extends \Delta\).

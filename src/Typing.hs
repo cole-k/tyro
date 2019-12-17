@@ -12,12 +12,8 @@ import Control.Monad (when, foldM)
 import Control.Monad.State.Lazy (runState, evalState)
 import Control.Monad.Except (throwError, runExceptT)
 
--- TODO remove the debugging stuff or put it elsewhere
 -- TODO add in explicit error handling for cases that don't match
 -- TODO make error messages much, much nicer
-
--- TODO fix projection in a case like this (\x->((x.a)(x.b)))
--- -^ something is wrong with passing around contexts almost for sure
 
 -- should tail variables be inserted first when they get added to the context?
 -- Do they go last? Does it matter?
@@ -188,6 +184,7 @@ check ctx (Trm _ (Lambda x body)) (Arr a b) = do
   -- Use the checked type in the arrow. Remove everything after and including
   -- the variable assignment.
   pure $ (applyCtx ctx' <$> Trm (Arr a b) (Lambda x body'), dropFromCtx var ctx')
+-- Sub (and general fallthrough case)
 check ctx e b = do
   (e', ctx') <- infer ctx e
   let a = getType e'
@@ -227,6 +224,7 @@ infer ctx (Trm _ (App e1 e2)) = do
   let a = getType e1'
   (e2', c, ctx'') <- inferApp ctx' (applyCtx ctx' a) e2
   pure (Trm c (App e1' e2'), ctx'')
+-- RcdI=>
 infer ctx (Trm _ (Rcd Row{rowMap=rm,rowTail=rt})) = do
   when (not $ null rt) $ throwError "Row tail given in concrete record inference (this shouldn't happen)."
   (ctx', newRowAssoc) <- foldM infer' (ctx, []) $ M.toList rm
@@ -236,6 +234,7 @@ infer ctx (Trm _ (Rcd Row{rowMap=rm,rowTail=rt})) = do
   where
     -- Yuck
     infer' (ctx, acc) (key, trm) = (\(trm', ctx') -> (ctx', (key, trm') : acc)) <$> infer ctx trm
+-- Prj
 infer ctx (Trm _ (Prj tm lbl)) = do
   (tm', ctx') <- infer ctx tm
   let tp' = getType tm'
@@ -287,15 +286,18 @@ inferApp ctx (Arr a c) e = do
   (e', ctx') <- check ctx e a
   pure (e', c, ctx')
 
+-- | Runs inference.
 runInferM :: InferM a -> Either String a
 runInferM = flip evalState initialCtx . runExceptT
 
+-- | Utility for both parsing and running inference.
 parseInfer :: String -> Either String (Term, Context)
 parseInfer str = do
   e <- parseTerm str
   (tm, ctx) <- runInferM (infer [] e)
   pure (applyCtx ctx <$> tm, ctx)
 
+-- | Debug utility for printing the results of 'parseInfer'.
 inferDebug :: String -> IO ()
 inferDebug str = case parseInfer str of
   Left err        -> putStrLn err
