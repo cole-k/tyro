@@ -5,15 +5,30 @@ Tyro is a toy language demonstrating bidirectional type checking of a row polymo
 The type system is currently being extended, but it is based on [_Complete and Easy Bidirectional 
 Typechecking for Higher-Rank Polymorphism_](https://arxiv.org/abs/1306.6032) by Dunfield and Krishnaswami.
 
-You can find descriptions of the type system in [docs/typing.tex](/docs/typing.tex)
+You can find descriptions of the type system in [docs/](/docs/)
+
+# Usage
+
+Build the project by running from the root
+
+```
+$ stack build
+```
+
+Presently the only way to interface with tyro is via the REPL, which can be
+accessed by running from the root
+
+```
+$ stack exec tyro-exe
+```
 
 # Evaluation
 Tyro presently is call-by-value and directly substitutes terms for bound variables.
 
 # Syntax
-The syntax is presently basic, incomplete, and subject to change.
+The syntax is presently basic, incomplete, and *subject to change*.
 
-It pretty much looks like a simple lambda calculus with explicit parethesization to make parsing easier.
+It pretty much looks and acts like a simple lambda calculus.
 
 ## Lambdas
 Define lambdas as
@@ -114,8 +129,3 @@ After one beta reduction, it will be
 ((\x -> ((\x -> x) x)) ())
 ```
 which will beta reduce after some steps to `()`.
-
-# Usage
-Presently the only way to interface with tyro is via the REPL, which can be
-accessed by running from the root `$ stack exec tyro-exe`. The descriptions of
-syntax primarily serve as reference for contributors.
