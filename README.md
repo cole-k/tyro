@@ -1,5 +1,11 @@
 # tyro
 Tyro is a toy language demonstrating bidirectional type checking of a row polymorphic lambda calculus.
+It was implemented during Fall of 2019 as part of ongoing research at Harvey Mudd College.
+
+This work is being continued in a slightly different direction [here](https://github.com/cole-k/default-rows).
+(link in plaintext: https://github.com/cole-k/default-rows).
+
+Eventually, these two repos may be unified, but for now, "working" code lives here and ongoing research lives there.
 
 # Type System
 The type system is currently being extended, but it is based on [_Complete and Easy Bidirectional 
